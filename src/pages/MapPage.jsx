@@ -1,0 +1,459 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import { divIcon } from 'leaflet';
+import { renderToStaticMarkup } from 'react-dom/server';
+import Logo from '../components/Logo';
+import ThemeToggle from '../components/ThemeToggle';
+import BottomSheet from '../components/BottomSheet';
+import VibeTagChip from '../components/VibeTagChip';
+import { useToast } from '../components/Toast';
+import UserActionMenu from '../components/UserActionMenu';
+import { useNearbyUsers } from '../hooks/useNearbyUsers';
+import { useTheme } from '../hooks/useTheme';
+import { setLocation, updateLocation, deleteLocation } from '../firebase/firestore';
+import { fuzzyLocation } from '../utils/fuzzyLocation';
+import { getDistanceKm, formatDistance } from '../utils/distance';
+import { sendSignal } from '../utils/signalLimit';
+import { serverTimestamp } from 'firebase/firestore';
+
+const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+const TILE_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const VISIBLE_DURATION_MS = 2 * 60 * 60 * 1000;
+const NEARBY_RADIUS_KM = 0.01;
+
+function genderBorderColor(gender) {
+  if (gender === 'male')   return '#FF4B6E';
+  if (gender === 'female') return '#00CC88';
+  return '#AA66FF';
+}
+
+function makeMarkerIcon(u) {
+  const color = genderBorderColor(u.gender);
+  const firstName = (u.firstName || 'U').split(' ')[0];
+  const html = renderToStaticMarkup(
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, animation: 'markerAppear 0.3s ease' }}>
+      <div style={{
+        width: 56, height: 56, borderRadius: '50%',
+        border: `3px solid ${color}`, overflow: 'hidden',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: color, boxSizing: 'border-box', flexShrink: 0,
+      }}>
+        {u.photoURL
+          ? <img src={u.photoURL} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+          : <span style={{ color: '#fff', fontWeight: 700, fontSize: 20, fontFamily: 'Inter,sans-serif' }}>{firstName[0].toUpperCase()}</span>
+        }
+      </div>
+      <div style={{
+        background: 'rgba(0,0,0,0.65)', color: '#fff',
+        borderRadius: 20, padding: '2px 8px',
+        fontSize: 11, fontWeight: 600, fontFamily: 'Inter,sans-serif',
+        whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>{firstName}</div>
+    </div>
+  );
+  return divIcon({ html, className: '', iconSize: [80, 84], iconAnchor: [40, 68] });
+}
+
+function PulseIcon() {
+  const html = renderToStaticMarkup(
+    <div style={{ position: 'relative', width: 18, height: 18 }}>
+      <div style={{ width: 18, height: 18, background: '#0066FF', borderRadius: '50%', border: '2.5px solid #fff', boxSizing: 'border-box' }} />
+    </div>
+  );
+  return divIcon({ html, className: '', iconSize: [18, 18], iconAnchor: [9, 9] });
+}
+
+function RecenterMap({ coords }) {
+  const map = useMap();
+  const didCenter = useRef(false);
+  useEffect(() => {
+    if (coords && !didCenter.current) {
+      map.setView([coords.lat, coords.lng], 19, { animate: true });
+      didCenter.current = true;
+    }
+  }, [coords, map]);
+  return null;
+}
+
+function GenderBadge({ gender }) {
+  const map = {
+    male:   { label: 'Male',   color: 'var(--color-male)' },
+    female: { label: 'Female', color: 'var(--color-female)' },
+    other:  { label: 'Other',  color: 'var(--color-other)' },
+  };
+  const { label, color } = map[gender] || { label: gender, color: 'var(--color-primary)' };
+  return <span className="chip" style={{ color, fontSize: 12, padding: '4px 10px' }}>{label}</span>;
+}
+
+function FilterPill({ label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+        border: `1.5px solid ${active ? 'transparent' : 'var(--color-border)'}`,
+        background: active ? 'var(--color-primary)' : 'var(--color-surface)',
+        color: active ? '#fff' : 'var(--color-text-secondary)',
+        cursor: 'pointer', transition: 'all 0.2s',
+      }}
+    >{label}</button>
+  );
+}
+
+function SignalModeCard({ title, icon, subtitle, description, selected, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        flex: 1, padding: '16px 12px', borderRadius: 16, cursor: 'pointer',
+        border: `2px solid ${selected ? 'var(--color-primary)' : 'var(--color-border)'}`,
+        background: selected ? 'rgba(0,102,255,0.08)' : 'var(--color-surface)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+        transition: 'all 0.2s',
+      }}
+    >
+      <div style={{ fontSize: 28, lineHeight: 1 }}>{icon}</div>
+      <div style={{ fontWeight: 700, fontSize: 14 }}>{title}</div>
+      {subtitle && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', textAlign: 'center' }}>{subtitle}</div>}
+      <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', textAlign: 'center', lineHeight: 1.4 }}>{description}</div>
+    </div>
+  );
+}
+
+function VisibilityPrompt({ onGoVisible, onDismiss }) {
+  return (
+    <BottomSheet onClose={onDismiss}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center', textAlign: 'center' }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <i className="ti ti-radio" style={{ fontSize: 28, color: '#fff' }} />
+        </div>
+        <div>
+          <h3>Ready to be discovered?</h3>
+          <p style={{ marginTop: 8, fontSize: 15, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
+            Go visible so people nearby can find you on the map.
+            You control when you&apos;re seen.
+          </p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+          <button className="btn btn-primary btn-full" onClick={onGoVisible}>
+            Go Visible Now
+          </button>
+          <button onClick={onDismiss} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 15, padding: '10px 0', fontWeight: 500 }}>
+            Maybe Later
+          </button>
+        </div>
+      </div>
+    </BottomSheet>
+  );
+}
+
+export default function MapPage({ user, profile }) {
+  const navigate = useNavigate();
+  const showToast = useToast();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  const [userCoords, setUserCoords] = useState(null);
+  const userCoordsRef = useRef(null);
+  const [visible, setVisible] = useState(false);
+  const [showVisibilityPrompt, setShowVisibilityPrompt] = useState(false);
+  const lastUpdateRef = useRef(0);
+  const [expiresAt, setExpiresAt] = useState(null);
+  const [timeLeft, setTimeLeft] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [sendingSignal, setSendingSignal] = useState(false);
+  const [anonymous, setAnonymous] = useState(false);
+  const [genderFilter, setGenderFilter] = useState('all');
+  const [senderQuote, setSenderQuote] = useState('');
+
+  const allNearbyUsers = useNearbyUsers(user?.uid);
+
+  // Filter by 10m radius and gender
+  const nearbyUsers = allNearbyUsers
+    .filter((u) => {
+      if (!userCoordsRef.current) return true;
+      const dist = getDistanceKm(userCoordsRef.current.lat, userCoordsRef.current.lng, u.lat, u.lng);
+      return dist <= NEARBY_RADIUS_KM;
+    })
+    .filter((u) => genderFilter === 'all' || u.gender === genderFilter);
+
+  // First-time visibility prompt (shown once after onboarding)
+  useEffect(() => {
+    const alreadyPrompted = localStorage.getItem('signal_visibility_prompted') === 'true';
+    if (!alreadyPrompted) {
+      const t = setTimeout(() => setShowVisibilityPrompt(true), 1200);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
+  // Watch position continuously (UI updates every reading; Firestore debounced to 5s in the interval below)
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setUserCoords(coords);
+        userCoordsRef.current = coords;
+      },
+      () => showToast('Location access denied', 'error'),
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
+
+  // Update Firestore location every 5 seconds when visible (debounced)
+  useEffect(() => {
+    if (!visible || !user?.uid) return;
+    const interval = setInterval(async () => {
+      const now = Date.now();
+      if (now - lastUpdateRef.current < 5000) return;
+      lastUpdateRef.current = now;
+      const coords = userCoordsRef.current;
+      if (!coords) return;
+      const fuzzy = fuzzyLocation(coords.lat, coords.lng);
+      try {
+        await updateLocation(user.uid, {
+          lat: fuzzy.lat, lng: fuzzy.lng,
+          updatedAt: serverTimestamp(),
+          expiresAt: new Date(Date.now() + VISIBLE_DURATION_MS),
+        });
+      } catch {}
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [visible, user?.uid]);
+
+  // Expiry countdown
+  useEffect(() => {
+    if (!visible || !expiresAt) { setTimeLeft(''); return; }
+    const tick = () => {
+      const rem = expiresAt - Date.now();
+      if (rem <= 0) { setVisible(false); setExpiresAt(null); return; }
+      const h = Math.floor(rem / 3600000);
+      const m = Math.floor((rem % 3600000) / 60000);
+      setTimeLeft(`${h}h ${m}m left`);
+    };
+    tick();
+    const id = setInterval(tick, 30000);
+    return () => clearInterval(id);
+  }, [visible, expiresAt]);
+
+  const toggleVisibility = async () => {
+    if (!userCoords || !user || !profile) { showToast('Location not available yet', 'error'); return; }
+    if (visible) {
+      try {
+        await deleteLocation(user.uid);
+        setVisible(false); setExpiresAt(null);
+        showToast('Gone ghost');
+      } catch { showToast('Failed to go ghost', 'error'); }
+    } else {
+      try {
+        const fuzzy = fuzzyLocation(userCoords.lat, userCoords.lng);
+        const exp = new Date(Date.now() + VISIBLE_DURATION_MS);
+        await setLocation(user.uid, {
+          lat: fuzzy.lat, lng: fuzzy.lng,
+          gender: profile.gender,
+          firstName: profile.displayName,
+          vibeTag: profile.vibeTags?.[0] || '',
+          photoURL: profile.photoURL || null,
+          expiresAt: exp,
+        });
+        setVisible(true); setExpiresAt(exp.getTime());
+        showToast("You're visible for 2 hours");
+      } catch { showToast('Failed to go visible', 'error'); }
+    }
+  };
+
+  const handleSignal = useCallback(async () => {
+    if (!selectedUser || !user || !profile) return;
+    setSendingSignal(true);
+    const enrichedProfile = { ...profile, senderQuote: senderQuote.trim() || null };
+    const signalId = await sendSignal(user.uid, selectedUser.id, anonymous, enrichedProfile, showToast);
+    setSendingSignal(false);
+    if (signalId) {
+      setSelectedUser(null);
+      setSenderQuote('');
+      showToast('Signal sent!', 'success');
+    }
+  }, [selectedUser, user, profile, anonymous, senderQuote, showToast]);
+
+  const distanceToSelected = selectedUser && userCoordsRef.current
+    ? getDistanceKm(userCoordsRef.current.lat, userCoordsRef.current.lng, selectedUser.lat, selectedUser.lng)
+    : null;
+
+  const defaultCenter = userCoords || { lat: 12.9716, lng: 77.5946 };
+
+  return (
+    <div className="map-page">
+      <style>{`
+        @keyframes markerAppear {
+          from { transform: scale(0.5); opacity: 0; }
+          to   { transform: scale(1);   opacity: 1; }
+        }
+      `}</style>
+
+      <div className="map-container">
+        <MapContainer
+          center={[defaultCenter.lat, defaultCenter.lng]}
+          zoom={19}
+          maxZoom={19}
+          zoomControl={false}
+          style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
+        >
+          <TileLayer url={isDark ? TILE_DARK : TILE_LIGHT} maxZoom={19} />
+          {userCoords && <RecenterMap coords={userCoords} />}
+          {userCoords && <Marker position={[userCoords.lat, userCoords.lng]} icon={PulseIcon()} />}
+          {nearbyUsers.map((u) => (
+            <Marker
+              key={u.id}
+              position={[u.lat, u.lng]}
+              icon={makeMarkerIcon(u)}
+              eventHandlers={{ click: () => { setSelectedUser(u); setAnonymous(false); } }}
+            />
+          ))}
+        </MapContainer>
+
+        {/* Top bar */}
+        <div className="map-topbar">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Logo variant="icon" size={32} />
+            <button
+              onClick={() => navigate('/leaderboard')}
+              style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFD700' }}
+            >
+              <i className="ti ti-trophy" style={{ fontSize: 16 }} />
+            </button>
+          </div>
+          <ThemeToggle />
+        </div>
+
+        {/* Gender filter pills */}
+        <div style={{
+          position: 'absolute', top: 64, left: 0, right: 0,
+          display: 'flex', justifyContent: 'center', gap: 8, zIndex: 1000, padding: '0 16px',
+        }}>
+          {['all', 'male', 'female'].map((g) => (
+            <FilterPill
+              key={g}
+              label={g === 'all' ? 'All' : g.charAt(0).toUpperCase() + g.slice(1)}
+              active={genderFilter === g}
+              onClick={() => setGenderFilter(g)}
+            />
+          ))}
+        </div>
+
+        {/* Visibility pill */}
+        <div className="visibility-pill-wrap">
+          <button className={`visibility-pill${visible ? ' visible' : ''}`} onClick={toggleVisibility}>
+            <i className={`ti ${visible ? 'ti-radio' : 'ti-ghost'}`} />
+            {visible ? `Visible · ${timeLeft}` : 'Go Visible'}
+          </button>
+        </div>
+      </div>
+
+      {/* First-time visibility prompt */}
+      {showVisibilityPrompt && (
+        <VisibilityPrompt
+          onGoVisible={() => {
+            setShowVisibilityPrompt(false);
+            localStorage.setItem('signal_visibility_prompted', 'true');
+            toggleVisibility();
+          }}
+          onDismiss={() => {
+            setShowVisibilityPrompt(false);
+            localStorage.setItem('signal_visibility_prompted', 'true');
+          }}
+        />
+      )}
+
+      {/* Send Signal bottom sheet */}
+      {selectedUser && (
+        <BottomSheet onClose={() => setSelectedUser(null)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Target user info */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{
+                width: 60, height: 60, borderRadius: '50%',
+                border: `3px solid ${genderBorderColor(selectedUser.gender)}`,
+                overflow: 'hidden', background: genderBorderColor(selectedUser.gender),
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                {selectedUser.photoURL
+                  ? <img src={selectedUser.photoURL} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+                  : <span style={{ color: '#fff', fontWeight: 700, fontSize: 22 }}>{(selectedUser.firstName || '?')[0].toUpperCase()}</span>
+                }
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 17 }}>{selectedUser.firstName}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <GenderBadge gender={selectedUser.gender} />
+                  {selectedUser.vibeTag && <VibeTagChip label={selectedUser.vibeTag} />}
+                </div>
+                {distanceToSelected !== null && (
+                  <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+                    {formatDistance(distanceToSelected)}
+                  </div>
+                )}
+              </div>
+              <UserActionMenu
+                myUid={user?.uid}
+                targetUid={selectedUser.id}
+                targetName={selectedUser.firstName}
+                onBlock={() => setSelectedUser(null)}
+              />
+            </div>
+
+            {/* Mode selection */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <SignalModeCard
+                title="As Yourself"
+                icon={
+                  profile?.photoURL
+                    ? <img src={profile.photoURL} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} alt="" />
+                    : <i className="ti ti-user" style={{ fontSize: 28, color: 'var(--color-primary)' }} />
+                }
+                subtitle={profile?.displayName}
+                description="They'll see who you are"
+                selected={!anonymous}
+                onClick={() => setAnonymous(false)}
+              />
+              <SignalModeCard
+                title="As Ghost"
+                icon={<i className="ti ti-ghost" style={{ fontSize: 28, color: 'var(--color-text-secondary)' }} />}
+                subtitle="Anonymous"
+                description="They won't know it's you"
+                selected={anonymous}
+                onClick={() => setAnonymous(true)}
+              />
+            </div>
+
+            {/* Optional quote */}
+            <div className="input-group">
+              <label className="input-label" style={{ fontSize: 12 }}>
+                How do you feel? <span style={{ color: 'var(--color-text-secondary)' }}>(optional · only you see this)</span>
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  className="input-field"
+                  type="text"
+                  placeholder="Something about this moment…"
+                  value={senderQuote}
+                  onChange={(e) => setSenderQuote(e.target.value.slice(0, 50))}
+                  maxLength={50}
+                  style={{ paddingRight: 40 }}
+                />
+                <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                  {senderQuote.length}/50
+                </span>
+              </div>
+            </div>
+
+            <button className="btn btn-primary btn-full" onClick={handleSignal} disabled={sendingSignal}>
+              {sendingSignal ? <span className="spinner" style={{ width: 18, height: 18 }} /> : <><i className="ti ti-send" /> Send Signal</>}
+            </button>
+          </div>
+        </BottomSheet>
+      )}
+    </div>
+  );
+}

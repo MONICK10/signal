@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" fill="none">
+  <defs>
+    <linearGradient id="iconGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7C6FFF"/>
+      <stop offset="100%" stop-color="#5A4FE0"/>
+    </linearGradient>
+    <linearGradient id="dotGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9D94FF"/>
+      <stop offset="100%" stop-color="#6C63FF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- App Icon -->
+  <rect width="80" height="80" x="20" y="20" rx="18" fill="url(#iconGrad)"/>
+  <path d="M60 58 Q60 42 60 42" stroke="none"/>
+  <!-- Arcs -->
+  <path d="M44 60 Q44 44 60 44 Q76 44 76 60" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M49 60 Q49 49 60 49 Q71 49 71 60" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M54 60 Q54 54 60 54 Q66 54 66 60" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <circle cx="60" cy="62" r="4" fill="white"/>
+  <circle cx="60" cy="62" r="2" fill="url(#dotGrad)"/>
+
+  <!-- Full lockup wordmark -->
+  <rect width="80" height="80" x="120" y="20" rx="14" fill="url(#iconGrad)"/>
+  <path d="M160 58 Q160 42 160 42" stroke="none"/>
+  <path d="M144 60 Q144 44 160 44 Q176 44 176 60" stroke="white" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <path d="M149 60 Q149 49 160 49 Q171 49 171 60" stroke="white" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <path d="M154 60 Q154 54 160 54 Q166 54 166 60" stroke="white" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <circle cx="160" cy="62" r="3.5" fill="white"/>
+  <circle cx="160" cy="62" r="1.8" fill="url(#dotGrad)"/>
+  <text x="212" y="55" font-family="Inter, sans-serif" font-weight="700" font-size="26" fill="#111118" letter-spacing="-0.5">Signal</text>
+  <text x="212" y="76" font-family="Inter, sans-serif" font-weight="400" font-size="10" fill="#6C63FF" letter-spacing="3">NOTICE. SIGNAL. CONNECT.</text>
+
+  <!-- Dark lockup -->
+  <rect width="400" height="120" x="0" y="0" fill="none"/>
+</svg>
