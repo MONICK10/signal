@@ -3,6 +3,14 @@
 -- Run this entire file in: Supabase Dashboard → SQL Editor
 -- ============================================================
 
+-- ── Drop existing policies (safe re-run) ──────────────────────
+DO $$ DECLARE r RECORD;
+BEGIN
+  FOR r IN SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public' LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', r.policyname, r.tablename);
+  END LOOP;
+END $$;
+
 -- ── Profiles ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
@@ -31,7 +39,7 @@ CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (auth.uid() IS NOT 
 CREATE POLICY "profiles_insert" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "profiles_update" ON profiles FOR UPDATE USING (auth.uid() = id);
 
--- ── Private vibes (text never exposed to other users) ─────────
+-- ── Private vibes ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS private_vibes (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   content TEXT,
@@ -95,7 +103,7 @@ CREATE TABLE IF NOT EXISTS signal_cooldowns (
 ALTER TABLE signal_cooldowns ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "cooldowns_all" ON signal_cooldowns FOR ALL USING (auth.uid() IS NOT NULL);
 
--- ── Chats (anonymous timed) ───────────────────────────────────
+-- ── Chats ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS chats (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   participants UUID[],
@@ -343,56 +351,41 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
 -- ============================================================
--- RPC: accept_friend_request (atomic batch equivalent)
+-- RPC: accept_friend_request
 -- ============================================================
 CREATE OR REPLACE FUNCTION accept_friend_request(
-  p_request_id UUID,
-  p_my_uid UUID,
-  p_from_uid UUID,
-  p_my_display_name TEXT,
-  p_my_photo_url TEXT,
-  p_my_gender TEXT,
-  p_my_vibe_tags TEXT[],
-  p_from_display_name TEXT,
-  p_from_photo_url TEXT,
-  p_from_gender TEXT,
-  p_from_vibe_tags TEXT[]
+  p_request_id UUID, p_my_uid UUID, p_from_uid UUID,
+  p_my_display_name TEXT, p_my_photo_url TEXT, p_my_gender TEXT, p_my_vibe_tags TEXT[],
+  p_from_display_name TEXT, p_from_photo_url TEXT, p_from_gender TEXT, p_from_vibe_tags TEXT[]
 )
 RETURNS VOID AS $$
 BEGIN
   INSERT INTO friends (user_id, friend_uid, display_name, photo_url, gender, vibe_tags)
   VALUES (p_my_uid, p_from_uid, p_from_display_name, p_from_photo_url, p_from_gender, p_from_vibe_tags)
   ON CONFLICT (user_id, friend_uid) DO NOTHING;
-
   INSERT INTO friends (user_id, friend_uid, display_name, photo_url, gender, vibe_tags)
   VALUES (p_from_uid, p_my_uid, p_my_display_name, p_my_photo_url, p_my_gender, p_my_vibe_tags)
   ON CONFLICT (user_id, friend_uid) DO NOTHING;
-
-  UPDATE friend_requests
-    SET status = 'accepted', responded_at = NOW()
-    WHERE id = p_request_id;
-
+  UPDATE friend_requests SET status = 'accepted', responded_at = NOW() WHERE id = p_request_id;
   UPDATE profiles SET friends_count = friends_count + 1 WHERE id = p_my_uid;
   UPDATE profiles SET friends_count = friends_count + 1 WHERE id = p_from_uid;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
--- RPC: remove_friend (atomic)
+-- RPC: remove_friend
 -- ============================================================
 CREATE OR REPLACE FUNCTION remove_friend(p_uid1 UUID, p_uid2 UUID)
 RETURNS VOID AS $$
 BEGIN
-  DELETE FROM friends
-    WHERE (user_id = p_uid1 AND friend_uid = p_uid2)
-       OR (user_id = p_uid2 AND friend_uid = p_uid1);
+  DELETE FROM friends WHERE (user_id = p_uid1 AND friend_uid = p_uid2) OR (user_id = p_uid2 AND friend_uid = p_uid1);
   UPDATE profiles SET friends_count = GREATEST(0, friends_count - 1) WHERE id = p_uid1;
   UPDATE profiles SET friends_count = GREATEST(0, friends_count - 1) WHERE id = p_uid2;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
--- RPC: compute_vibe_score (server-side, text never exposed)
+-- RPC: compute_vibe_score (server-side only, text never exposed)
 -- ============================================================
 CREATE OR REPLACE FUNCTION compute_vibe_score(uid1 UUID, uid2 UUID)
 RETURNS INT AS $$
@@ -404,10 +397,8 @@ BEGIN
   SELECT content INTO text1 FROM private_vibes WHERE user_id = uid1;
   SELECT content INTO text2 FROM private_vibes WHERE user_id = uid2;
   IF text1 IS NULL OR text2 IS NULL THEN RETURN NULL; END IF;
-
   words1 := string_to_array(lower(regexp_replace(text1, '[^a-zA-Z0-9\s]', '', 'g')), ' ');
   words2 := string_to_array(lower(regexp_replace(text2, '[^a-zA-Z0-9\s]', '', 'g')), ' ');
-
   SELECT COUNT(*) INTO overlap_count FROM unnest(words1) w WHERE w = ANY(words2) AND length(w) > 3;
   total := array_length(words1, 1) + array_length(words2, 1);
   IF total IS NULL OR total = 0 THEN RETURN 0; END IF;
@@ -418,19 +409,13 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================
 -- RPC: respond_to_vibe_request
 -- ============================================================
-CREATE OR REPLACE FUNCTION respond_to_vibe_request(
-  p_request_id UUID,
-  p_responder_uid UUID,
-  p_accept BOOLEAN
-)
+CREATE OR REPLACE FUNCTION respond_to_vibe_request(p_request_id UUID, p_responder_uid UUID, p_accept BOOLEAN)
 RETURNS JSONB AS $$
-DECLARE
-  req RECORD; score_val INT;
+DECLARE req RECORD; score_val INT;
 BEGIN
   SELECT * INTO req FROM vibe_requests WHERE id = p_request_id;
   IF req IS NULL THEN RAISE EXCEPTION 'Request not found'; END IF;
   IF req.to_user_id != p_responder_uid THEN RAISE EXCEPTION 'Unauthorized'; END IF;
-
   IF p_accept THEN
     score_val := compute_vibe_score(req.from_user_id, req.to_user_id);
     UPDATE vibe_requests SET status = 'accepted', score = score_val, resolved_at = NOW() WHERE id = p_request_id;
@@ -443,7 +428,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
--- RPC: send_vibe_request (duplicate check)
+-- RPC: send_vibe_request
 -- ============================================================
 CREATE OR REPLACE FUNCTION send_vibe_request(p_from_uid UUID, p_to_uid UUID)
 RETURNS UUID AS $$
@@ -451,12 +436,9 @@ DECLARE new_id UUID;
 BEGIN
   IF EXISTS (
     SELECT 1 FROM vibe_requests
-    WHERE ((from_user_id = p_from_uid AND to_user_id = p_to_uid)
-        OR (from_user_id = p_to_uid   AND to_user_id = p_from_uid))
+    WHERE ((from_user_id = p_from_uid AND to_user_id = p_to_uid) OR (from_user_id = p_to_uid AND to_user_id = p_from_uid))
       AND status = 'pending'
-  ) THEN
-    RAISE EXCEPTION 'already-exists';
-  END IF;
+  ) THEN RAISE EXCEPTION 'already-exists'; END IF;
   INSERT INTO vibe_requests (from_user_id, to_user_id) VALUES (p_from_uid, p_to_uid) RETURNING id INTO new_id;
   RETURN new_id;
 END;
@@ -465,59 +447,17 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================
 -- Enable Realtime on key tables
 -- ============================================================
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE signals;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE chats;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE friend_requests;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE friends;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE friend_messages;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE friend_chats;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE locations;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE vibe_requests;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE follows;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE glimpses;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE profiles;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE posts;
-EXCEPTION WHEN duplicate_object THEN NULL; END$$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE signals;       EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE chats;          EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE friend_requests;EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE friends;         EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE friend_messages; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE friend_chats;   EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE locations;      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE notifications;  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE vibe_requests;  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE follows;        EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE glimpses;       EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE profiles;       EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE posts;          EXCEPTION WHEN duplicate_object THEN NULL; END $$;

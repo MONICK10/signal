@@ -102,19 +102,23 @@ export default function Signup() {
     if (selectedTags.length < 3) { showToast('Pick at least 3 vibe tags', 'error'); return; }
     setLoading(true);
     try {
-      const cred = await registerUser(email, password);
-      // Write full profile synchronously before navigating
-      await createUserProfile(cred.user.uid, {
-        email: email.trim().toLowerCase(),
-        displayName: displayName.trim(),
-        age: parseInt(age),
-        gender,
-        vibeTags: selectedTags,
-      });
+      const { user, session } = await registerUser(email, password);
+      if (session && user?.id) {
+        // Session available immediately (email confirmation disabled) — write full profile now
+        await createUserProfile(user.id, {
+          email: email.trim().toLowerCase(),
+          displayName: displayName.trim(),
+          age: parseInt(age),
+          gender,
+          vibeTags: selectedTags,
+        });
+      }
+      // If no session, the DB trigger already created a minimal profile;
+      // remaining fields will be saved after the user confirms their email and logs in.
       navigate('/verify-email', { replace: true });
     } catch (err) {
       setLoading(false);
-      const msg = err.code === 'auth/email-already-in-use'
+      const msg = err.message?.includes('already registered') || err.message?.includes('already in use')
         ? 'Email already in use'
         : 'Registration failed. Try again.';
       showToast(msg, 'error');
