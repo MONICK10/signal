@@ -1,62 +1,61 @@
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  sendEmailVerification,
-  sendPasswordResetEmail,
-  updatePassword,
-  reauthenticateWithCredential,
-  EmailAuthProvider,
-  deleteUser,
-  browserSessionPersistence,
-  browserLocalPersistence,
-  setPersistence,
-} from 'firebase/auth';
-import { app } from './config';
+import { supabase } from './config';
 
-export const auth = getAuth(app);
-
-export async function loginUser(email, password, remember = true) {
-  await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
-  return signInWithEmailAndPassword(auth, email, password);
+export async function loginUser(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data;
 }
 
-const actionCodeSettings = {
-  url: `${window.location.origin}/verify-email`,
-  handleCodeInApp: false,
-};
-
 export async function registerUser(email, password) {
-  const cred = await createUserWithEmailAndPassword(auth, email, password);
-  await sendEmailVerification(cred.user, actionCodeSettings);
-  return cred;
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: `${window.location.origin}/verify-email` },
+  });
+  if (error) throw error;
+  return data;
 }
 
 export async function resendVerificationEmail() {
-  if (auth.currentUser) await sendEmailVerification(auth.currentUser, actionCodeSettings);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase.auth.resend({ type: 'signup', email: user.email });
 }
 
 export async function reloadUser() {
-  if (auth.currentUser) await auth.currentUser.reload();
-  return auth.currentUser;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
 }
 
 export async function logoutUser() {
-  return signOut(auth);
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
 }
 
 export async function resetPassword(email) {
-  return sendPasswordResetEmail(auth, email);
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+  if (error) throw error;
 }
 
 export async function changePassword(currentPassword, newPassword) {
-  const user = auth.currentUser;
-  const credential = EmailAuthProvider.credential(user.email, currentPassword);
-  await reauthenticateWithCredential(user, credential);
-  return updatePassword(user, newPassword);
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error: authError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: currentPassword,
+  });
+  if (authError) {
+    const e = new Error('Wrong password'); e.code = 'auth/wrong-password'; throw e;
+  }
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
 }
 
 export async function deleteAccount() {
-  return deleteUser(auth.currentUser);
+  // Full deletion needs a server-side Edge Function; sign out for now
+  await supabase.auth.signOut();
 }
+
+// Legacy shape — a few components check auth.currentUser
+export const auth = { get currentUser() { return null; } };

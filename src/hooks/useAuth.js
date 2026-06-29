@@ -1,40 +1,64 @@
 import { useState, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../firebase/auth';
+import { supabase } from '../firebase/config';
 import { getUserProfile, createUserProfile } from '../firebase/firestore';
+
+function normalizeUser(supabaseUser) {
+  if (!supabaseUser) return null;
+  return {
+    uid: supabaseUser.id,
+    email: supabaseUser.email,
+    emailVerified: !!supabaseUser.email_confirmed_at,
+    displayName: supabaseUser.user_metadata?.display_name || null,
+    photoURL: supabaseUser.user_metadata?.photo_url || null,
+    _raw: supabaseUser,
+  };
+}
 
 export function useAuth() {
   const [user, setUser] = useState(undefined);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const loadProfile = async (u) => {
+    try {
+      let p = await getUserProfile(u.uid);
+      if (!p) {
+        await createUserProfile(u.uid, {
+          displayName: u.displayName || u.email?.split('@')[0] || 'User',
+          email: u.email,
+          gender: null,
+          vibeTags: [],
+        });
+        p = await getUserProfile(u.uid);
+      }
+      setProfile(p);
+    } catch {
+      setProfile(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      if (firebaseUser) {
-        try {
-          let p = await getUserProfile(firebaseUser.uid);
-          if (!p) {
-            // Profile doc missing — create a skeleton so writes don't fail
-            await createUserProfile(firebaseUser.uid, {
-              displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-              email: firebaseUser.email,
-              age: null,
-              gender: null,
-              vibeTags: [],
-            });
-            p = await getUserProfile(firebaseUser.uid);
-          }
-          setProfile(p);
-        } catch {
-          setProfile(null);
-        }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = normalizeUser(session?.user);
+      setUser(u);
+      if (u) loadProfile(u);
+      else setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const u = normalizeUser(session?.user);
+      setUser(u);
+      if (u) {
+        await loadProfile(u);
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return unsub;
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const refreshProfile = async () => {

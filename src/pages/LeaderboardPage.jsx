@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  collection, query, where, onSnapshot, Timestamp,
-} from 'firebase/firestore';
-import { db, getUserProfile } from '../firebase/firestore';
+import { supabase } from '../firebase/config';
+import { getUserProfile } from '../firebase/firestore';
 import { getDistanceKm } from '../utils/distance';
 
 const RADIUS_KM = 0.1;
@@ -49,12 +47,16 @@ export default function LeaderboardPage({ user }) {
   // Subscribe to visible locations, filter to 100m, then fetch profiles
   useEffect(() => {
     if (!myCoords || !user?.uid) return;
-    const now = Timestamp.now();
-    const q = query(collection(db, 'locations'), where('expiresAt', '>', now));
-    const unsub = onSnapshot(q, async (snap) => {
+    let cancelled = false;
+
+    const fetchNearby = async () => {
       setLoading(true);
-      const nearby = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
+      const { data } = await supabase.from('locations').select('*')
+        .gt('expires_at', new Date().toISOString());
+
+      if (cancelled) return;
+      const nearby = (data || [])
+        .map((r) => ({ id: r.user_id, lat: r.lat, lng: r.lng }))
         .filter((u) => u.id !== user.uid && getDistanceKm(myCoords.lat, myCoords.lng, u.lat, u.lng) <= RADIUS_KM);
 
       const profiles = await Promise.all(
@@ -72,8 +74,13 @@ export default function LeaderboardPage({ user }) {
 
       setRanked(entries);
       setLoading(false);
-    });
-    return unsub;
+    };
+
+    fetchNearby();
+    const ch = supabase.channel('leaderboard-locations')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, fetchNearby)
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [myCoords, user?.uid]);
 
   return (

@@ -4,8 +4,7 @@ import BottomSheet from '../components/BottomSheet';
 import { useToast } from '../components/Toast';
 import { useTheme } from '../hooks/useTheme';
 import { updateUserProfile, submitProblemReport } from '../firebase/firestore';
-import { deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase/firestore';
+import { supabase } from '../firebase/config';
 import { logoutUser, changePassword, deleteAccount } from '../firebase/auth';
 import { deleteFriendList, deleteLocation } from '../firebase/firestore';
 
@@ -243,8 +242,8 @@ function DeleteAccountSheet({ user, onClose }) {
     setLoading(true);
     try {
       await Promise.allSettled([
-        deleteDoc(doc(db, 'users', user.uid)),
-        deleteDoc(doc(db, 'locations', user.uid)),
+        supabase.from('profiles').delete().eq('id', user.uid),
+        deleteLocation(user.uid),
         deleteFriendList(user.uid),
       ]);
       await deleteAccount();

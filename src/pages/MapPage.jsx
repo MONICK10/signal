@@ -15,7 +15,7 @@ import { setLocation, updateLocation, deleteLocation, getLocation } from '../fir
 import { fuzzyLocation } from '../utils/fuzzyLocation';
 import { getDistanceKm, formatDistance } from '../utils/distance';
 import { sendSignal } from '../utils/signalLimit';
-import { serverTimestamp } from 'firebase/firestore';
+
 
 const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 const TILE_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
@@ -267,7 +267,6 @@ export default function MapPage({ user, profile }) {
       try {
         await updateLocation(user.uid, {
           lat: fuzzy.lat, lng: fuzzy.lng,
-          updatedAt: serverTimestamp(),
           expiresAt: new Date(Date.now() + VISIBLE_DURATION_MS),
         });
       } catch {}
