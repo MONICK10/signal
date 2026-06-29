@@ -18,7 +18,7 @@ export default function VerifyEmail() {
     try {
       const freshUser = await reloadUser();
       if (freshUser?.emailVerified) {
-        const dest = localStorage.getItem('signal_onboarding_complete') === 'true' ? '/map' : '/onboarding';
+        const dest = localStorage.getItem('cuelyn_onboarding_complete') === 'true' ? '/map' : '/onboarding';
         navigate(dest, { replace: true });
       } else {
         showToast('Email not verified yet. Please check your inbox.', 'error');

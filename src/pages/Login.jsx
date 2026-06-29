@@ -6,7 +6,7 @@ import BottomSheet from '../components/BottomSheet';
 import { useToast } from '../components/Toast';
 import { loginUser, resetPassword } from '../firebase/auth';
 
-const ATTEMPTS_KEY = 'signal_login_attempts';
+const ATTEMPTS_KEY = 'cuelyn_login_attempts';
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
 
@@ -36,7 +36,7 @@ export default function Login() {
   const showToast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showResetSheet, setShowResetSheet] = useState(false);
   const [resetEmail, setResetEmail] = useState('');

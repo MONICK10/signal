@@ -4,7 +4,7 @@ import { useToast } from '../components/Toast';
 import { getBlockedUsersWithProfiles, unblockUser } from '../firebase/firestore';
 
 function Avatar({ name, photoURL, gender, size = 44 }) {
-  const colors = { male: '#FF4B6E', female: '#00CC88', other: '#AA66FF' };
+  const colors = { male: '#3B82F6', female: '#A855F7', other: '#F59E0B' };
   const bg = colors[gender] || 'var(--color-primary)';
   if (photoURL) {
     return <img src={photoURL} alt="" loading="lazy" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${bg}`, flexShrink: 0 }} />;

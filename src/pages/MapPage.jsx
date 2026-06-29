@@ -11,7 +11,7 @@ import { useToast } from '../components/Toast';
 import UserActionMenu from '../components/UserActionMenu';
 import { useNearbyUsers } from '../hooks/useNearbyUsers';
 import { useTheme } from '../hooks/useTheme';
-import { setLocation, updateLocation, deleteLocation } from '../firebase/firestore';
+import { setLocation, updateLocation, deleteLocation, getLocation } from '../firebase/firestore';
 import { fuzzyLocation } from '../utils/fuzzyLocation';
 import { getDistanceKm, formatDistance } from '../utils/distance';
 import { sendSignal } from '../utils/signalLimit';
@@ -20,12 +20,30 @@ import { serverTimestamp } from 'firebase/firestore';
 const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 const TILE_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 const VISIBLE_DURATION_MS = 2 * 60 * 60 * 1000;
-const NEARBY_RADIUS_KM = 0.01;
+const NEARBY_RADIUS_KM = 5;
 
 function genderBorderColor(gender) {
-  if (gender === 'male')   return '#FF4B6E';
-  if (gender === 'female') return '#00CC88';
-  return '#AA66FF';
+  if (gender === 'male')   return '#3B82F6';
+  if (gender === 'female') return '#A855F7';
+  return '#F59E0B';
+}
+
+function offsetDuplicates(users) {
+  const groups = {};
+  users.forEach((u) => {
+    const key = `${u.lat},${u.lng}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(u.id);
+  });
+  const SPREAD = 0.0003;
+  return users.map((u) => {
+    const key = `${u.lat},${u.lng}`;
+    const group = groups[key];
+    if (group.length === 1) return u;
+    const idx = group.indexOf(u.id);
+    const angle = (2 * Math.PI * idx) / group.length;
+    return { ...u, lat: u.lat + SPREAD * Math.sin(angle), lng: u.lng + SPREAD * Math.cos(angle) };
+  });
 }
 
 function makeMarkerIcon(u) {
@@ -41,13 +59,13 @@ function makeMarkerIcon(u) {
       }}>
         {u.photoURL
           ? <img src={u.photoURL} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
-          : <span style={{ color: '#fff', fontWeight: 700, fontSize: 20, fontFamily: 'Inter,sans-serif' }}>{firstName[0].toUpperCase()}</span>
+          : <span style={{ color: '#fff', fontWeight: 700, fontSize: 20, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>{firstName[0].toUpperCase()}</span>
         }
       </div>
       <div style={{
         background: 'rgba(0,0,0,0.65)', color: '#fff',
         borderRadius: 20, padding: '2px 8px',
-        fontSize: 11, fontWeight: 600, fontFamily: 'Inter,sans-serif',
+        fontSize: 11, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif",
         whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis',
       }}>{firstName}</div>
     </div>
@@ -55,13 +73,30 @@ function makeMarkerIcon(u) {
   return divIcon({ html, className: '', iconSize: [80, 84], iconAnchor: [40, 68] });
 }
 
-function PulseIcon() {
+function CurrentUserIcon(profile) {
+  const firstName = (profile?.displayName || 'Me').split(' ')[0];
   const html = renderToStaticMarkup(
-    <div style={{ position: 'relative', width: 18, height: 18 }}>
-      <div style={{ width: 18, height: 18, background: '#0066FF', borderRadius: '50%', border: '2.5px solid #fff', boxSizing: 'border-box' }} />
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+      <div style={{
+        width: 56, height: 56, borderRadius: '50%',
+        border: '3px solid #E11D48', overflow: 'hidden',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: '#E11D48', boxSizing: 'border-box', flexShrink: 0,
+      }}>
+        {profile?.photoURL
+          ? <img src={profile.photoURL} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+          : <span style={{ color: '#fff', fontWeight: 700, fontSize: 20, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>{(firstName[0] || 'M').toUpperCase()}</span>
+        }
+      </div>
+      <div style={{
+        background: 'rgba(255,59,59,0.85)', color: '#fff',
+        borderRadius: 20, padding: '2px 8px',
+        fontSize: 11, fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif",
+        whiteSpace: 'nowrap',
+      }}>You</div>
     </div>
   );
-  return divIcon({ html, className: '', iconSize: [18, 18], iconAnchor: [9, 9] });
+  return divIcon({ html, className: '', iconSize: [80, 84], iconAnchor: [40, 68] });
 }
 
 function RecenterMap({ coords }) {
@@ -108,7 +143,7 @@ function SignalModeCard({ title, icon, subtitle, description, selected, onClick 
       style={{
         flex: 1, padding: '16px 12px', borderRadius: 16, cursor: 'pointer',
         border: `2px solid ${selected ? 'var(--color-primary)' : 'var(--color-border)'}`,
-        background: selected ? 'rgba(0,102,255,0.08)' : 'var(--color-surface)',
+        background: selected ? 'rgba(225,29,72,0.08)' : 'var(--color-surface)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
         transition: 'all 0.2s',
       }}
@@ -169,23 +204,40 @@ export default function MapPage({ user, profile }) {
 
   const allNearbyUsers = useNearbyUsers(user?.uid);
 
-  // Filter by 10m radius and gender
-  const nearbyUsers = allNearbyUsers
-    .filter((u) => {
-      if (!userCoordsRef.current) return true;
-      const dist = getDistanceKm(userCoordsRef.current.lat, userCoordsRef.current.lng, u.lat, u.lng);
-      return dist <= NEARBY_RADIUS_KM;
-    })
-    .filter((u) => genderFilter === 'all' || u.gender === genderFilter);
+  // Filter by radius and gender, then spread any markers that share the same fuzzy coordinate
+  const nearbyUsers = offsetDuplicates(
+    allNearbyUsers
+      .filter((u) => {
+        if (!userCoordsRef.current) return true;
+        const dist = getDistanceKm(userCoordsRef.current.lat, userCoordsRef.current.lng, u.lat, u.lng);
+        return dist <= NEARBY_RADIUS_KM;
+      })
+      .filter((u) => genderFilter === 'all' || u.gender === genderFilter)
+  );
 
   // First-time visibility prompt (shown once after onboarding)
   useEffect(() => {
-    const alreadyPrompted = localStorage.getItem('signal_visibility_prompted') === 'true';
+    const alreadyPrompted = localStorage.getItem('cuelyn_visibility_prompted') === 'true';
     if (!alreadyPrompted) {
       const t = setTimeout(() => setShowVisibilityPrompt(true), 1200);
       return () => clearTimeout(t);
     }
   }, []);
+
+  // Restore visibility state after reload: check if active location doc exists in Firestore
+  useEffect(() => {
+    if (!user?.uid) return;
+    getLocation(user.uid).then((loc) => {
+      if (!loc) return;
+      const exp = loc.expiresAt?.toDate?.() ?? (loc.expiresAt instanceof Date ? loc.expiresAt : null);
+      if (exp && exp > new Date()) {
+        setVisible(true);
+        setExpiresAt(exp.getTime());
+      } else {
+        deleteLocation(user.uid).catch(() => {});
+      }
+    }).catch(() => {});
+  }, [user?.uid]);
 
   // Watch position continuously (UI updates every reading; Firestore debounced to 5s in the interval below)
   useEffect(() => {
@@ -267,7 +319,7 @@ export default function MapPage({ user, profile }) {
   const handleSignal = useCallback(async () => {
     if (!selectedUser || !user || !profile) return;
     setSendingSignal(true);
-    const enrichedProfile = { ...profile, senderQuote: senderQuote.trim() || null };
+    const enrichedProfile = { ...profile, senderQuote: senderQuote.trim() || null, toDisplayName: selectedUser.firstName || null };
     const signalId = await sendSignal(user.uid, selectedUser.id, anonymous, enrichedProfile, showToast);
     setSendingSignal(false);
     if (signalId) {
@@ -302,7 +354,7 @@ export default function MapPage({ user, profile }) {
         >
           <TileLayer url={isDark ? TILE_DARK : TILE_LIGHT} maxZoom={19} />
           {userCoords && <RecenterMap coords={userCoords} />}
-          {userCoords && <Marker position={[userCoords.lat, userCoords.lng]} icon={PulseIcon()} />}
+          {userCoords && visible && <Marker position={[userCoords.lat, userCoords.lng]} icon={CurrentUserIcon(profile)} />}
           {nearbyUsers.map((u) => (
             <Marker
               key={u.id}
@@ -317,14 +369,17 @@ export default function MapPage({ user, profile }) {
         <div className="map-topbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Logo variant="icon" size={32} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
               onClick={() => navigate('/leaderboard')}
-              style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFD700' }}
+              style={{ background: 'rgba(128,128,128,0.15)', border: 'none', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--color-text-primary)' }}
+              title="Nearby Leaderboard"
             >
-              <i className="ti ti-trophy" style={{ fontSize: 16 }} />
+              <i className="ti ti-trophy" style={{ fontSize: 18 }} />
             </button>
+            <ThemeToggle />
           </div>
-          <ThemeToggle />
         </div>
 
         {/* Gender filter pills */}
@@ -346,7 +401,7 @@ export default function MapPage({ user, profile }) {
         <div className="visibility-pill-wrap">
           <button className={`visibility-pill${visible ? ' visible' : ''}`} onClick={toggleVisibility}>
             <i className={`ti ${visible ? 'ti-radio' : 'ti-ghost'}`} />
-            {visible ? `Visible · ${timeLeft}` : 'Go Visible'}
+            {visible ? `Visible · ${timeLeft}` : 'Ghost Mode'}
           </button>
         </div>
       </div>
@@ -356,12 +411,12 @@ export default function MapPage({ user, profile }) {
         <VisibilityPrompt
           onGoVisible={() => {
             setShowVisibilityPrompt(false);
-            localStorage.setItem('signal_visibility_prompted', 'true');
+            localStorage.setItem('cuelyn_visibility_prompted', 'true');
             toggleVisibility();
           }}
           onDismiss={() => {
             setShowVisibilityPrompt(false);
-            localStorage.setItem('signal_visibility_prompted', 'true');
+            localStorage.setItem('cuelyn_visibility_prompted', 'true');
           }}
         />
       )}

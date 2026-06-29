@@ -35,7 +35,7 @@ export default function NetworkBanner() {
       width: '100%',
       maxWidth: 430,
       zIndex: 9999,
-      background: isOnline ? '#00C8A0' : '#FF5A6A',
+      background: isOnline ? '#111111' : '#DC2626',
       color: '#fff',
       textAlign: 'center',
       fontSize: 13,

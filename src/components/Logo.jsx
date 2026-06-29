@@ -6,21 +6,17 @@ function Icon({ px }) {
     <svg width={px} height={px} viewBox="0 0 88 88" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id={`front_${id}`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#00A3FF" />
-          <stop offset="50%" stopColor="#0066FF" />
-          <stop offset="100%" stopColor="#0040CC" />
+          <stop offset="0%" stopColor="#FB7185" />
+          <stop offset="50%" stopColor="#E11D48" />
+          <stop offset="100%" stopColor="#9F1239" />
         </linearGradient>
         <linearGradient id={`right_${id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#0040CC" />
-          <stop offset="100%" stopColor="#002B99" />
+          <stop offset="0%" stopColor="#9F1239" />
+          <stop offset="100%" stopColor="#7F1D3B" />
         </linearGradient>
         <linearGradient id={`bottom_${id}`} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#002B99" />
-          <stop offset="100%" stopColor="#001A66" />
-        </linearGradient>
-        <linearGradient id={`dot_${id}`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#00EAFF" />
-          <stop offset="100%" stopColor="#00A3FF" />
+          <stop offset="0%" stopColor="#7F1D3B" />
+          <stop offset="100%" stopColor="#6B1632" />
         </linearGradient>
       </defs>
 
@@ -31,16 +27,16 @@ function Icon({ px }) {
       {/* Front face */}
       <rect x="4" y="4" width="68" height="68" rx="14" fill={`url(#front_${id})`} />
       {/* Top-left corner highlight */}
-      <path d="M 4 20 Q 4 4 20 4" stroke="white" strokeWidth="3" fill="none" opacity="0.15" strokeLinecap="round" />
+      <path d="M 4 20 Q 4 4 20 4" stroke="white" strokeWidth="3" fill="none" opacity="0.25" strokeLinecap="round" />
 
-      {/* Signal arcs — opacity 0.3 / 0.6 / 0.9 */}
+      {/* Signal arcs */}
       <path d="M 18 52 Q 18 28 38 28 Q 58 28 58 52" stroke="white" strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.3" />
       <path d="M 23 52 Q 23 33 38 33 Q 53 33 53 52" stroke="white" strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.6" />
-      <path d="M 28 52 Q 28 38 38 38 Q 48 38 48 52" stroke="white" strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.9" />
+      <path d="M 28 52 Q 28 38 38 38 Q 48 38 48 52" stroke="white" strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.95" />
 
       {/* Center dot */}
       <circle cx="38" cy="55" r="5" fill="white" />
-      <circle cx="38" cy="55" r="2.5" fill={`url(#dot_${id})`} />
+      <circle cx="38" cy="55" r="2.5" fill="rgba(255,255,255,0.55)" />
     </svg>
   );
 }
@@ -54,9 +50,6 @@ export default function Logo({ variant = 'icon', size = 'md' }) {
   }
 
   const isDark = variant === 'dark';
-  const nameColor = isDark ? '#F0F0F8' : 'transparent';
-  const nameFill = isDark ? '#F0F0F8' : undefined;
-  const gradId = `textGrad_${px}_${variant}`;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -68,33 +61,27 @@ export default function Logo({ variant = 'icon', size = 'md' }) {
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#0066FF" />
-            <stop offset="100%" stopColor="#00A3FF" />
-          </linearGradient>
-        </defs>
         <text
           x="0"
           y={iconPx * 0.58}
-          fontFamily="Inter, sans-serif"
+          fontFamily="'Plus Jakarta Sans', sans-serif"
           fontWeight="800"
           fontSize={iconPx * 0.52}
           letterSpacing="-1"
-          fill={isDark ? nameFill : `url(#${gradId})`}
+          fill={isDark ? '#FFFFFF' : '#1A0810'}
         >
-          Signal
+          Cuelyn
         </text>
         <text
           x="0"
           y={iconPx * 0.92}
-          fontFamily="Inter, sans-serif"
-          fontWeight="400"
-          fontSize={iconPx * 0.18}
-          letterSpacing="2.5"
-          fill="#8888A8"
+          fontFamily="'Plus Jakarta Sans', sans-serif"
+          fontWeight="600"
+          fontSize={iconPx * 0.17}
+          letterSpacing="2.2"
+          fill={isDark ? 'rgba(255,255,255,0.5)' : '#7E6872'}
         >
-          NOTICE · SIGNAL · CONNECT
+          NOTICE · CUELYN · CONNECT
         </text>
       </svg>
     </div>

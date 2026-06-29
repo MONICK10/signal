@@ -1,5 +1,5 @@
 import { getToken, onMessage } from 'firebase/messaging';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { messaging } from '../firebase/config';
 import { db } from '../firebase/firestore';
 
@@ -7,7 +7,7 @@ export function usePushNotifications() {
   const requestPermission = async (uid) => {
     if (!messaging) return;
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-    if (!vapidKey) return; // VAPID key not configured yet
+    if (!vapidKey) return;
 
     try {
       const permission = await Notification.requestPermission();
@@ -15,10 +15,12 @@ export function usePushNotifications() {
 
       const token = await getToken(messaging, { vapidKey });
       if (token) {
-        await updateDoc(doc(db, 'users', uid), { fcmToken: token });
+        // Store in array so multiple devices and token rotations are handled cleanly.
+        // arrayUnion is idempotent — no duplicates written if the token didn't change.
+        await updateDoc(doc(db, 'users', uid), { fcmTokens: arrayUnion(token) });
       }
     } catch {
-      // Silently fail — push notifications are optional
+      // Push notifications are optional — silently ignore setup failures
     }
   };
 

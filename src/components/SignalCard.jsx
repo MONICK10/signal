@@ -3,7 +3,7 @@ import { formatDistanceToNow } from 'date-fns';
 import VibeTagChip from './VibeTagChip';
 
 function Avatar({ photoURL, name, gender, blurred, size = 48 }) {
-  const colors = { male: '#FF4B6E', female: '#00CC88', other: '#AA66FF' };
+  const colors = { male: '#3B82F6', female: '#A855F7', other: '#F59E0B' };
   const borderColor = colors[gender] || 'var(--color-primary)';
 
   if (blurred) {

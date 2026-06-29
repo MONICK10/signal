@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Logo from './Logo';
 
-const DISMISSED_KEY = 'signal_install_dismissed';
+const DISMISSED_KEY = 'cuelyn_install_dismissed';
 
 export default function InstallPrompt() {
   const [prompt, setPrompt] = useState(null);
@@ -62,7 +62,7 @@ export default function InstallPrompt() {
       }}>
         <Logo variant="icon" size={32} />
         <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>
-          Add Signal to home screen
+          Add Cuelyn to home screen
         </span>
         <button
           onClick={handleInstall}

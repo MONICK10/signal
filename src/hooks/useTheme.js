@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const STORAGE_KEY = 'signal-theme';
+const STORAGE_KEY = 'cuelyn-theme';
 
 export function useTheme() {
   const [theme, setTheme] = useState(() => {

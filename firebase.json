@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "source": "functions"
+  },
   "hosting": {
     "public": "dist",
     "ignore": [
@@ -26,5 +29,9 @@
         "headers": [{ "key": "Cache-Control", "value": "max-age=31536000, immutable" }]
       }
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   }
 }

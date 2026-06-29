@@ -40,7 +40,7 @@ export default function Splash() {
       setTimeout(() => {
         if (!user) { navigate('/login', { replace: true }); return; }
         if (!user.emailVerified) { navigate('/verify-email', { replace: true }); return; }
-        const isOnboardingDone = localStorage.getItem('signal_onboarding_complete') === 'true';
+        const isOnboardingDone = localStorage.getItem('cuelyn_onboarding_complete') === 'true';
         navigate(isOnboardingDone ? '/feed' : '/onboarding', { replace: true });
       }, 300);
     };
@@ -90,7 +90,7 @@ export default function Splash() {
         transform: phase >= 1 ? 'translateY(0)' : 'translateY(8px)',
         transition: 'opacity 0.3s ease, transform 0.3s ease',
       }}>
-        <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--color-text-primary)' }}>Signal</h1>
+        <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--color-text-primary)' }}>Cuelyn</h1>
       </div>
 
       {/* Tagline */}
@@ -101,7 +101,7 @@ export default function Splash() {
         transition: 'opacity 0.3s ease 0.1s, transform 0.3s ease 0.1s',
       }}>
         <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', letterSpacing: '2px', textTransform: 'uppercase' }}>
-          notice. signal. connect.
+          notice. cuelyn. connect.
         </p>
       </div>
 

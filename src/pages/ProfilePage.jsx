@@ -1,16 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 import ThemeToggle from '../components/ThemeToggle';
 import BottomSheet from '../components/BottomSheet';
 import EmptyState from '../components/EmptyState';
 import { useToast } from '../components/Toast';
 import {
-  updateUserProfile, getTotalSignalsReceived,
-  getTotalMatches, setUsername, checkUsernameAvailable, subscribeUserPosts,
-  subscribeFriends, subscribeFriendRequests,
-  acceptFriendRequest, declineFriendRequest, getUserProfile,
+  updateUserProfile, setUsername, checkUsernameAvailable,
+  getReceivedSignals, getSentSignals,
 } from '../firebase/firestore';
 import { uploadFile } from '../firebase/storage';
+import { getAnonymousLabel } from '../utils/anonymousLabels';
 
 const GENDER_COLORS = { male: 'var(--color-male)', female: 'var(--color-female)', other: 'var(--color-other)' };
 
@@ -26,7 +26,6 @@ function Avatar({ photoURL, displayName, gender, size }) {
   );
 }
 
-// Username-must-be-set blocker sheet (cannot be dismissed)
 function UsernameRequiredSheet({ uid, onDone }) {
   const showToast = useToast();
   const [input, setInput] = useState('');
@@ -100,31 +99,154 @@ function UsernameRequiredSheet({ uid, onDone }) {
   );
 }
 
-function FriendRequestCard({ request, onAccept, onDecline }) {
-  const [senderProfile, setSenderProfile] = useState(null);
-  useEffect(() => {
-    getUserProfile(request.fromUid).then(setSenderProfile).catch(() => {});
-  }, [request.fromUid]);
+/* ── Signal History section ───────────────────────────────────── */
+const SIGNAL_COLORS = { male: '#3B82F6', female: '#A855F7', other: '#F59E0B' };
 
-  const name = senderProfile?.displayName || 'Someone';
+function SignalAvatar({ photoURL, name, gender, isAnon }) {
+  if (isAnon) {
+    return (
+      <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--color-surface-2)', border: '2px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <i className="ti ti-ghost" style={{ fontSize: 18, color: 'var(--color-text-secondary)' }} />
+      </div>
+    );
+  }
+  const bg = SIGNAL_COLORS[gender] || 'var(--color-primary)';
+  if (photoURL) {
+    return <img src={photoURL} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${bg}` }} />;
+  }
   return (
-    <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', marginBottom: 8 }}>
-      <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 16, flexShrink: 0, overflow: 'hidden' }}>
-        {senderProfile?.photoURL
-          ? <img src={senderProfile.photoURL} alt="" style={{ width: 44, height: 44, objectFit: 'cover' }} />
-          : name[0]}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 14 }}>{name} wants to be friends</div>
-      </div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button onClick={onAccept} style={{ padding: '6px 14px', background: 'var(--color-success)', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Accept</button>
-        <button onClick={onDecline} style={{ padding: '6px 10px', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', color: 'var(--color-text-primary)' }}>Decline</button>
-      </div>
+    <div style={{ width: 44, height: 44, borderRadius: '50%', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 17, flexShrink: 0 }}>
+      {(name || '?')[0].toUpperCase()}
     </div>
   );
 }
 
+function SignalHistoryEntry({ signal, isReceived, allReceivedSignals }) {
+  const isAnon = signal.anonymous && isReceived;
+  const anonLabel = isAnon ? getAnonymousLabel(signal.fromUid, allReceivedSignals) : null;
+
+  const name = isAnon
+    ? anonLabel
+    : isReceived
+      ? signal.fromDisplayName || 'Someone'
+      : signal.toDisplayName || 'Someone';
+
+  const photoURL = isReceived && !isAnon ? signal.fromPhotoURL : null;
+  const gender = isReceived && !isAnon ? signal.fromGender : null;
+
+  const date = signal.createdAt?.toDate
+    ? format(signal.createdAt.toDate(), 'MMM d · h:mm a')
+    : '';
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '12px 0',
+      borderBottom: '1px solid var(--color-border)',
+    }}>
+      <SignalAvatar photoURL={photoURL} name={name} gender={gender} isAnon={isAnon} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--color-text-primary)' }}>{name}</div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+          {isReceived ? 'Signaled you' : 'You signaled'}
+          {date ? ` · ${date}` : ''}
+        </div>
+        {signal.locationLabel && (
+          <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+            <i className="ti ti-map-pin" style={{ fontSize: 10, marginRight: 3 }} />
+            {signal.locationLabel}
+          </div>
+        )}
+      </div>
+      <span style={{
+        fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 20,
+        background: isReceived ? 'var(--color-surface-2)' : 'var(--color-surface-2)',
+        color: isReceived ? 'var(--color-accent)' : 'var(--color-primary)',
+        flexShrink: 0,
+      }}>
+        {isReceived ? 'Received' : 'Sent'}
+      </span>
+    </div>
+  );
+}
+
+function SignalHistorySection({ uid }) {
+  const [received, setReceived] = useState([]);
+  const [sent, setSent] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState('all');
+
+  useEffect(() => {
+    if (!uid) return;
+    setLoading(true);
+    Promise.all([getReceivedSignals(uid), getSentSignals(uid)])
+      .then(([r, s]) => { setReceived(r); setSent(s); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [uid]);
+
+  const allMerged = [...received.map((s) => ({ ...s, _type: 'received' })), ...sent.map((s) => ({ ...s, _type: 'sent' }))]
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    .slice(0, 50);
+
+  const displayList = tab === 'all'
+    ? allMerged
+    : tab === 'received'
+      ? allMerged.filter((s) => s._type === 'received')
+      : allMerged.filter((s) => s._type === 'sent');
+
+  return (
+    <div style={{ padding: '0 20px', paddingBottom: 24 }}>
+      {/* Section header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Signal History
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['all', 'received', 'sent'].map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                background: tab === t ? 'var(--color-primary)' : 'var(--color-surface)',
+                color: tab === t ? '#fff' : 'var(--color-text-secondary)',
+                border: `1px solid ${tab === t ? 'transparent' : 'var(--color-border)'}`,
+              }}
+            >
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
+          <span className="spinner" style={{ width: 22, height: 22 }} />
+        </div>
+      )}
+
+      {!loading && displayList.length === 0 && (
+        <EmptyState
+          icon="ti-clock-history"
+          title="No signals yet"
+          subtitle="Your signal history will appear here"
+        />
+      )}
+
+      {!loading && displayList.map((signal) => (
+        <SignalHistoryEntry
+          key={`${signal._type}-${signal.id}`}
+          signal={signal}
+          isReceived={signal._type === 'received'}
+          allReceivedSignals={received}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ── Main ProfilePage ─────────────────────────────────────────── */
 export default function ProfilePage({ user, profile, refreshProfile }) {
   const navigate = useNavigate();
   const showToast = useToast();
@@ -132,11 +254,7 @@ export default function ProfilePage({ user, profile, refreshProfile }) {
   const avatarInputRef = useRef(null);
 
   const [showUsernameSheet, setShowUsernameSheet] = useState(false);
-  const [stats, setStats] = useState({ receivedTotal: 0, matchesTotal: 0 });
-  const [posts, setPosts] = useState([]);
   const [uploading, setUploading] = useState(null);
-  const [friendCount, setFriendCount] = useState(0);
-  const [friendRequests, setFriendRequests] = useState([]);
 
   const bgColor = GENDER_COLORS[profile?.gender] || 'var(--color-primary)';
 
@@ -144,41 +262,6 @@ export default function ProfilePage({ user, profile, refreshProfile }) {
     if (!profile) return;
     if (!profile.username) setShowUsernameSheet(true);
   }, [profile?.username]);
-
-  useEffect(() => {
-    if (!user?.uid) return;
-    Promise.all([
-      getTotalSignalsReceived(user.uid),
-      getTotalMatches(user.uid),
-    ]).then(([received, matches]) => setStats({ receivedTotal: received, matchesTotal: matches })).catch(() => {});
-  }, [user?.uid]);
-
-  useEffect(() => {
-    if (!user?.uid) return;
-    return subscribeUserPosts(user.uid, setPosts);
-  }, [user?.uid]);
-
-  useEffect(() => {
-    if (!user?.uid) return;
-    return subscribeFriends(user.uid, (list) => setFriendCount(list.length));
-  }, [user?.uid]);
-
-  useEffect(() => {
-    if (!user?.uid) return;
-    return subscribeFriendRequests(user.uid, setFriendRequests);
-  }, [user?.uid]);
-
-  const handleAcceptFriendRequest = async (req) => {
-    try {
-      await acceptFriendRequest(req.id, user.uid, profile, req.fromUid);
-      showToast('Friend added!', 'success');
-    } catch { showToast('Failed', 'error'); }
-  };
-
-  const handleDeclineFriendRequest = async (req) => {
-    try { await declineFriendRequest(req.id); }
-    catch { showToast('Failed', 'error'); }
-  };
 
   const handleCoverUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -228,6 +311,7 @@ export default function ProfilePage({ user, profile, refreshProfile }) {
           </button>
           <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={handleCoverUpload} />
         </div>
+
         {/* Avatar overlapping cover */}
         <div style={{ position: 'absolute', bottom: -44, left: 20 }}>
           <div style={{ position: 'relative', width: 88, height: 88 }}>
@@ -243,7 +327,8 @@ export default function ProfilePage({ user, profile, refreshProfile }) {
             <input ref={avatarInputRef} type="file" accept="image/*" hidden onChange={handleAvatarUpload} />
           </div>
         </div>
-        {/* Edit Profile button — top-right of the info area */}
+
+        {/* Edit Profile button */}
         <div style={{ position: 'absolute', bottom: -38, right: 20 }}>
           <button
             onClick={() => navigate('/edit-profile')}
@@ -255,16 +340,21 @@ export default function ProfilePage({ user, profile, refreshProfile }) {
         </div>
       </div>
 
-      {/* Name + username + bio */}
-      <div style={{ padding: '0 20px 14px' }}>
-        <div style={{ fontWeight: 700, fontSize: 20, color: 'var(--color-text-primary)' }}>{profile?.displayName || 'You'}</div>
+      {/* Name + username + bio + vibe tags */}
+      <div style={{ padding: '0 20px 20px', borderBottom: '1px solid var(--color-border)' }}>
+        <div style={{ fontWeight: 700, fontSize: 20, color: 'var(--color-text-primary)' }}>
+          {profile?.displayName || 'You'}
+        </div>
         {profile?.username && (
-          <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 2 }}>@{profile.username}</div>
+          <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+            @{profile.username}
+          </div>
         )}
         {profile?.bio && (
-          <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 6, lineHeight: 1.5 }}>{profile.bio}</div>
+          <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 8, lineHeight: 1.5 }}>
+            {profile.bio}
+          </div>
         )}
-        {/* Vibe tags display */}
         {(profile?.vibeTags || []).length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
             {profile.vibeTags.map((t) => (
@@ -274,96 +364,22 @@ export default function ProfilePage({ user, profile, refreshProfile }) {
         )}
       </div>
 
-      {/* Stats */}
-      <div style={{ padding: '12px 20px 14px', borderTop: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
-        <div className="stats-row">
-          <div className="stat-card">
-            <span className="stat-value">{posts.length}</span>
-            <span className="stat-label">Quicks</span>
-          </div>
-          <div className="stat-card">
-            <span className="stat-value">{stats.receivedTotal}</span>
-            <span className="stat-label">Signals</span>
-          </div>
-          <div className="stat-card">
-            <span className="stat-value">{stats.matchesTotal}</span>
-            <span className="stat-label">Matches</span>
-          </div>
+      {/* Stats row */}
+      <div style={{ display: 'flex', padding: '12px 20px', borderBottom: '1px solid var(--color-border)' }}>
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <div style={{ fontWeight: 700, fontSize: 22, color: 'var(--color-text-primary)' }}>{profile?.friendsCount || 0}</div>
+          <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Friends</div>
         </div>
-
-        {/* Friends */}
-        <button
-          onClick={() => navigate('/friends')}
-          style={{ marginTop: 12, width: '100%', padding: '10px 14px', background: 'var(--color-surface)', border: '1.5px solid var(--color-border)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', color: 'var(--color-text-primary)' }}
-        >
-          <span style={{ fontWeight: 600, fontSize: 14 }}>
-            <i className="ti ti-users" style={{ marginRight: 8, color: 'var(--color-primary)' }} />
-            {friendCount} Friend{friendCount !== 1 ? 's' : ''}
-          </span>
-          <i className="ti ti-chevron-right" style={{ color: 'var(--color-text-secondary)', fontSize: 16 }} />
-        </button>
-      </div>
-
-      {/* Pending friend requests */}
-      {friendRequests.length > 0 && (
-        <div style={{ padding: '16px 20px 0' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-            Friend Requests
-          </div>
-          {friendRequests.map((req) => (
-            <FriendRequestCard
-              key={req.id}
-              request={req}
-              onAccept={() => handleAcceptFriendRequest(req)}
-              onDecline={() => handleDeclineFriendRequest(req)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Quick links */}
-      <div style={{ margin: '16px 20px', borderRadius: 16, border: '1px solid var(--color-border)', overflow: 'hidden' }}>
-        <div onClick={() => navigate('/signal-history')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
-          <i className="ti ti-history" style={{ color: 'var(--color-primary)', fontSize: 18 }} />
-          <span style={{ fontWeight: 500, fontSize: 15, flex: 1 }}>Signal History</span>
-          <i className="ti ti-chevron-right" style={{ color: 'var(--color-text-secondary)', fontSize: 16 }} />
-        </div>
-        <div onClick={() => navigate('/analytics')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', cursor: 'pointer', background: 'var(--color-surface)' }}>
-          <i className="ti ti-chart-bar" style={{ color: 'var(--color-primary)', fontSize: 18 }} />
-          <span style={{ fontWeight: 500, fontSize: 15, flex: 1 }}>My Signal Stats</span>
-          <i className="ti ti-chevron-right" style={{ color: 'var(--color-text-secondary)', fontSize: 16 }} />
+        <div style={{ width: 1, background: 'var(--color-border)', margin: '4px 0' }} />
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <div style={{ fontWeight: 700, fontSize: 22, color: 'var(--color-text-primary)' }}>{profile?.signalsReceivedTotal || 0}</div>
+          <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Signals received</div>
         </div>
       </div>
 
-      {/* Quicks grid */}
-      <div style={{ padding: '4px 20px 0' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-          Quicks
-        </div>
-
-        {posts.length === 0 ? (
-          <EmptyState
-            icon="ti-bolt"
-            title="No quicks yet"
-            subtitle="Share your first quick on the feed"
-            actionLabel="Post a Quick"
-            onAction={() => navigate('/create-post')}
-          />
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
-            {posts.map((post) => (
-              <div key={post.id} style={{ aspectRatio: '1', overflow: 'hidden', borderRadius: 6 }}>
-                {post.type === 'photo' && post.imageURL ? (
-                  <img src={post.imageURL} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <div style={{ width: '100%', height: '100%', background: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8 }}>
-                    <span style={{ color: '#fff', fontSize: 11, textAlign: 'center', lineHeight: 1.3, overflow: 'hidden' }}>{(post.content || '').slice(0, 20)}</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Signal History */}
+      <div style={{ marginTop: 20 }}>
+        <SignalHistorySection uid={user?.uid} />
       </div>
 
       {/* Username required blocker */}

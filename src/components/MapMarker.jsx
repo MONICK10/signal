@@ -8,15 +8,15 @@ function genderColor(gender) {
 }
 
 function genderHex(gender) {
-  if (gender === 'male') return '#4A90E2';
-  if (gender === 'female') return '#00CC88';
-  return '#AA66FF';
+  if (gender === 'male') return '#3B82F6';
+  if (gender === 'female') return '#A855F7';
+  return '#F59E0B';
 }
 
 export function createMarkerIcon(firstName, gender, isDark = false) {
   const color = genderHex(gender);
-  const bg = isDark ? '#1A1A24' : '#ffffff';
-  const textColor = isDark ? '#F0F0F8' : '#111118';
+  const bg = isDark ? '#1A1A1A' : '#ffffff';
+  const textColor = isDark ? '#FFFFFF' : '#111111';
   const initial = (firstName || '?')[0].toUpperCase();
 
   const html = renderToStaticMarkup(
@@ -32,7 +32,7 @@ export function createMarkerIcon(firstName, gender, isDark = false) {
       fontSize: '11px',
       fontWeight: '600',
       color: textColor,
-      fontFamily: 'Inter, sans-serif',
+      fontFamily: "'Plus Jakarta Sans', sans-serif",
       cursor: 'pointer',
       boxSizing: 'border-box',
     }}>

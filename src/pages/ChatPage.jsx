@@ -18,7 +18,7 @@ function formatTime(ms) {
 }
 
 function timerColor(ms) {
-  if (ms > 120000) return '#00C8A0';
+  if (ms > 120000) return 'var(--color-text-secondary)';
   if (ms > 60000)  return '#FF8C42';
   return '#FF3355';
 }
@@ -265,7 +265,7 @@ export default function ChatPage({ user, profile }) {
               style={{ fontWeight: 700, fontSize: 16, cursor: otherUid && !isAnon ? 'pointer' : 'default' }}
               onClick={() => otherUid && !isAnon && navigate(`/profile/${otherUid}`)}
             >{otherName}</span>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: isPaused ? '#FF8C42' : '#00C8A0', flexShrink: 0 }} />
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: isPaused ? '#FF8C42' : '#111111', flexShrink: 0 }} />
           </div>
           {/* Timer */}
           <div>

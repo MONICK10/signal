@@ -1,6 +1,6 @@
 {
   "name": "functions",
-  "description": "Signal app Cloud Functions",
+  "description": "Cuelyn app Cloud Functions",
   "engines": { "node": "18" },
   "main": "index.js",
   "dependencies": {

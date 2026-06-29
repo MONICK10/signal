@@ -9,7 +9,7 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    console.error('Signal Error:', error, info);
+    console.error('Cuelyn Error:', error, info);
   }
 
   render() {
@@ -26,7 +26,7 @@ export default class ErrorBoundary extends React.Component {
             Something went wrong
           </h2>
           <p style={{ marginTop: 8, fontSize: 14, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-            Signal ran into an error.<br />Tap below to reload.
+            Cuelyn ran into an error.<br />Tap below to reload.
           </p>
           <button
             onClick={() => window.location.reload()}
@@ -42,7 +42,7 @@ export default class ErrorBoundary extends React.Component {
               cursor: 'pointer',
             }}
           >
-            Reload Signal
+            Reload Cuelyn
           </button>
         </div>
       );

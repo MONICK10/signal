@@ -1,7 +1,7 @@
 {
-  "name": "Signal",
-  "short_name": "Signal",
-  "description": "notice. signal. connect.",
+  "name": "Cuelyn",
+  "short_name": "Cuelyn",
+  "description": "notice. cuelyn. connect.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

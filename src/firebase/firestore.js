@@ -17,6 +17,8 @@ import {
   increment,
   getDocs,
   Timestamp,
+  writeBatch,
+  arrayUnion,
 } from 'firebase/firestore';
 import { app } from './config';
 
@@ -67,6 +69,11 @@ export async function deleteLocation(uid) {
   await deleteDoc(doc(db, 'locations', uid));
 }
 
+export async function getLocation(uid) {
+  const snap = await getDoc(doc(db, 'locations', uid));
+  return snap.exists() ? snap.data() : null;
+}
+
 export function subscribeNearbyUsers(callback) {
   const q = query(collection(db, 'locations'), where('expiresAt', '>', new Date()));
   return onSnapshot(q, (snap) => {
@@ -90,6 +97,22 @@ export async function setSignalCooldown(senderUid, targetUid) {
   });
 }
 
+/* ─── Global signal cooldown (1 per hour total) ─────────────── */
+export async function checkGlobalSignalCooldown(uid) {
+  const snap = await getDoc(doc(db, 'users', uid));
+  if (!snap.exists()) return { canSend: true };
+  const last = snap.data().lastSignalSentAt;
+  if (!last) return { canSend: true };
+  const lastMs = last.toDate ? last.toDate().getTime() : last.seconds * 1000;
+  const diff = (Date.now() - lastMs) / 1000 / 60;
+  if (diff < 60) return { canSend: false, remaining: Math.ceil(60 - diff) };
+  return { canSend: true };
+}
+
+export async function setGlobalSignalCooldown(uid) {
+  await setDoc(doc(db, 'users', uid), { lastSignalSentAt: serverTimestamp() }, { merge: true });
+}
+
 /* ─── Signals ────────────────────────────────────────────────── */
 export async function sendSignalDoc(fromUid, toUid, anonymous, profile) {
   const ref = await addDoc(collection(db, 'signals'), {
@@ -98,11 +121,14 @@ export async function sendSignalDoc(fromUid, toUid, anonymous, profile) {
     fromPhotoURL: anonymous ? null : profile?.photoURL || null,
     fromGender: profile?.gender || null,
     fromVibeTag: profile?.vibeTags?.[0] || null,
+    toDisplayName: profile?.toDisplayName || null,
     senderQuote: profile?.senderQuote || null,
     locationLabel: profile?.locationLabel || null,
     chatId: null,
     createdAt: serverTimestamp(),
   });
+  // Increment receiver's total without blocking the send
+  updateDoc(doc(db, 'users', toUid), { signalsReceivedTotal: increment(1) }).catch(() => {});
   return ref.id;
 }
 
@@ -226,10 +252,50 @@ export async function endChat(chatId) {
 }
 
 /* ─── Friend requests ────────────────────────────────────────── */
-export async function createFriendRequest(fromUid, toUid, chatId) {
+export async function createFriendRequest(fromUid, toUid, chatId = null) {
   const ref = doc(collection(db, 'friendRequests'));
   await setDoc(ref, { id: ref.id, fromUid, toUid, chatId, status: 'pending', createdAt: serverTimestamp() });
   return ref.id;
+}
+
+export async function cancelFriendRequest(requestId) {
+  await deleteDoc(doc(db, 'friendRequests', requestId));
+}
+
+export function subscribeConnectionStatus(myUid, targetUid, callback) {
+  let isFriend = false;
+  let outgoing = null;
+  let incoming = null;
+  const emit = () => callback({ isFriend, outgoing, incoming });
+
+  const unsubFriend = onSnapshot(
+    doc(db, 'friends', myUid, 'friendList', targetUid),
+    (snap) => { isFriend = snap.exists(); emit(); }
+  );
+
+  const qOut = query(
+    collection(db, 'friendRequests'),
+    where('fromUid', '==', myUid),
+    where('toUid', '==', targetUid),
+    where('status', '==', 'pending')
+  );
+  const unsubOut = onSnapshot(qOut, (snap) => {
+    outgoing = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+    emit();
+  });
+
+  const qIn = query(
+    collection(db, 'friendRequests'),
+    where('fromUid', '==', targetUid),
+    where('toUid', '==', myUid),
+    where('status', '==', 'pending')
+  );
+  const unsubIn = onSnapshot(qIn, (snap) => {
+    incoming = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+    emit();
+  });
+
+  return () => { unsubFriend(); unsubOut(); unsubIn(); };
 }
 
 export function subscribeFriendRequests(uid, callback) {
@@ -252,7 +318,8 @@ export function subscribeFriendRequestsByChatId(chatId, callback) {
 
 export async function acceptFriendRequest(requestId, myUid, myProfile, fromUid) {
   const fromProfile = await getUserProfile(fromUid);
-  await setDoc(doc(db, 'friends', myUid, 'friendList', fromUid), {
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'friends', myUid, 'friendList', fromUid), {
     uid: fromUid,
     displayName: fromProfile?.displayName || 'Unknown',
     photoURL: fromProfile?.photoURL || null,
@@ -260,7 +327,7 @@ export async function acceptFriendRequest(requestId, myUid, myProfile, fromUid) 
     vibeTags: fromProfile?.vibeTags || [],
     addedAt: serverTimestamp(),
   });
-  await setDoc(doc(db, 'friends', fromUid, 'friendList', myUid), {
+  batch.set(doc(db, 'friends', fromUid, 'friendList', myUid), {
     uid: myUid,
     displayName: myProfile?.displayName || 'Unknown',
     photoURL: myProfile?.photoURL || null,
@@ -268,7 +335,10 @@ export async function acceptFriendRequest(requestId, myUid, myProfile, fromUid) 
     vibeTags: myProfile?.vibeTags || [],
     addedAt: serverTimestamp(),
   });
-  await updateDoc(doc(db, 'friendRequests', requestId), { status: 'accepted' });
+  batch.update(doc(db, 'friendRequests', requestId), { status: 'accepted', respondedAt: serverTimestamp() });
+  batch.update(doc(db, 'users', myUid), { friendsCount: increment(1) });
+  batch.update(doc(db, 'users', fromUid), { friendsCount: increment(1) });
+  await batch.commit();
 }
 
 export async function declineFriendRequest(requestId) {
@@ -288,8 +358,12 @@ export async function checkIsFriend(myUid, targetUid) {
 }
 
 export async function removeFriend(uid, friendUid) {
-  await deleteDoc(doc(db, 'friends', uid, 'friendList', friendUid));
-  await deleteDoc(doc(db, 'friends', friendUid, 'friendList', uid));
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'friends', uid, 'friendList', friendUid));
+  batch.delete(doc(db, 'friends', friendUid, 'friendList', uid));
+  batch.update(doc(db, 'users', uid), { friendsCount: increment(-1) });
+  batch.update(doc(db, 'users', friendUid), { friendsCount: increment(-1) });
+  await batch.commit();
 }
 
 /* ─── Friend chats ───────────────────────────────────────────── */
@@ -437,6 +511,17 @@ export async function reportUser(reporterUid, reportedUid, reason, details) {
   });
 }
 
+export async function submitProblemReport(uid, description) {
+  await addDoc(collection(db, 'reports'), {
+    type: 'problem_report',
+    reporterUid: uid,
+    reportedUid: null,
+    description: description.trim(),
+    createdAt: serverTimestamp(),
+    status: 'pending',
+  });
+}
+
 /* ─── Signal history queries ─────────────────────────────────── */
 export async function getReceivedSignals(uid) {
   const snap = await getDocs(
@@ -475,10 +560,253 @@ export async function deleteFriendList(uid) {
   await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
 }
 
-/* ─── Leaderboard ────────────────────────────────────────────── */
-export async function getLeaderboardUsers() {
-  const snap = await getDocs(
-    query(collection(db, 'locations'), where('expiresAt', '>', new Date()))
+/* ─── Real-time feed ─────────────────────────────────────────── */
+export function subscribeLatestPosts(callback, count = 40) {
+  const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(count));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  });
+}
+
+/* ─── Follow system ──────────────────────────────────────────── */
+export async function followUser(myUid, targetUid) {
+  await setDoc(doc(db, 'follows', `${myUid}_${targetUid}`), {
+    followerId: myUid, followingId: targetUid, createdAt: serverTimestamp(),
+  });
+}
+
+export async function unfollowUser(myUid, targetUid) {
+  await deleteDoc(doc(db, 'follows', `${myUid}_${targetUid}`));
+}
+
+export function subscribeMyFollowing(uid, callback) {
+  const q = query(collection(db, 'follows'), where('followerId', '==', uid));
+  return onSnapshot(q, (snap) => {
+    callback(new Set(snap.docs.map((d) => d.data().followingId)));
+  });
+}
+
+export function subscribeMyFollowers(uid, callback) {
+  const q = query(collection(db, 'follows'), where('followingId', '==', uid));
+  return onSnapshot(q, (snap) => {
+    callback(new Set(snap.docs.map((d) => d.data().followerId)));
+  });
+}
+
+export function subscribeUserFollowersList(uid, callback) {
+  const q = query(collection(db, 'follows'), where('followingId', '==', uid));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => d.data().followerId));
+  });
+}
+
+export function subscribeUserFollowingList(uid, callback) {
+  const q = query(collection(db, 'follows'), where('followerId', '==', uid));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => d.data().followingId));
+  });
+}
+
+/* ─── Comments ───────────────────────────────────────────────── */
+export async function addComment(postId, uid, displayName, photoURL, gender, text) {
+  const ref = doc(collection(db, 'posts', postId, 'comments'));
+  await setDoc(ref, {
+    id: ref.id, uid, displayName,
+    photoURL: photoURL || null, gender: gender || null,
+    text: text.trim(), createdAt: serverTimestamp(),
+  });
+  await updateDoc(doc(db, 'posts', postId), { commentsCount: increment(1) });
+  return ref.id;
+}
+
+export function subscribeComments(postId, callback) {
+  const q = query(
+    collection(db, 'posts', postId, 'comments'),
+    orderBy('createdAt', 'asc')
   );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  });
+}
+
+export async function deleteComment(postId, commentId, uid) {
+  const ref = doc(db, 'posts', postId, 'comments', commentId);
+  const snap = await getDoc(ref);
+  if (!snap.exists() || snap.data().uid !== uid) return;
+  await deleteDoc(ref);
+  await updateDoc(doc(db, 'posts', postId), { commentsCount: increment(-1) });
+}
+
+export async function getLatestPost(uid) {
+  const snap = await getDocs(
+    query(collection(db, 'posts'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(1))
+  );
+  return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+}
+
+export function subscribeLocation(uid, callback) {
+  return onSnapshot(doc(db, 'locations', uid), (snap) => {
+    callback(snap.exists() ? snap.data() : null);
+  });
+}
+
+/* ─── Glimpses ───────────────────────────────────────────────── */
+const GLIMPSE_TTL_MS = 24 * 60 * 60 * 1000;
+
+export async function createGlimpse(userId, mediaUrl, mediaType) {
+  const expiresAt = Timestamp.fromDate(new Date(Date.now() + GLIMPSE_TTL_MS));
+  const ref = doc(collection(db, 'glimpses'));
+  await setDoc(ref, {
+    id: ref.id, userId, mediaUrl, mediaType,
+    createdAt: serverTimestamp(), expiresAt, viewedBy: [],
+  });
+  return ref.id;
+}
+
+export function subscribeMyGlimpses(userId, callback) {
+  const now = Timestamp.now();
+  const q = query(
+    collection(db, 'glimpses'),
+    where('userId', '==', userId),
+    where('expiresAt', '>', now)
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  });
+}
+
+export function subscribeActiveGlimpses(friendUids, callback) {
+  if (!friendUids || friendUids.length === 0) {
+    callback([]);
+    return () => {};
+  }
+  const now = Timestamp.now();
+  const chunks = [];
+  for (let i = 0; i < friendUids.length; i += 30) chunks.push(friendUids.slice(i, i + 30));
+  const results = new Array(chunks.length).fill([]);
+  const unsubs = chunks.map((chunk, idx) => {
+    const q = query(
+      collection(db, 'glimpses'),
+      where('userId', 'in', chunk),
+      where('expiresAt', '>', now)
+    );
+    return onSnapshot(q, (snap) => {
+      results[idx] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback([...results.flat()]);
+    });
+  });
+  return () => unsubs.forEach((u) => u());
+}
+
+export async function markGlimpseViewed(glimpseId, viewerUid) {
+  await updateDoc(doc(db, 'glimpses', glimpseId), { viewedBy: arrayUnion(viewerUid) });
+}
+
+export async function deleteGlimpse(glimpseId) {
+  await deleteDoc(doc(db, 'glimpses', glimpseId));
+}
+
+/* ─── Vibe ───────────────────────────────────────────────────── */
+
+export async function saveMyVibe(uid, content) {
+  // TODO: moderation hook — insert content check here before saving
+  await setDoc(doc(db, 'users', uid, 'private', 'vibe'), {
+    content: content.trim(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function getMyVibe(uid) {
+  const snap = await getDoc(doc(db, 'users', uid, 'private', 'vibe'));
+  return snap.exists() ? snap.data() : null;
+}
+
+// Real-time vibe request status between two users.
+// Callback receives: { phase: 'none'|'pending-out'|'pending-in'|'result', score, requestId }
+export function subscribeVibeStatus(myUid, targetUid, callback) {
+  let out = null;
+  let inc = null;
+
+  const emit = () => {
+    const accepted = [out, inc].find((r) => r?.status === 'accepted');
+    if (accepted) {
+      callback({ phase: 'result', score: accepted.result?.score ?? null, requestId: accepted.id });
+      return;
+    }
+    if (out?.status === 'pending') { callback({ phase: 'pending-out', requestId: out.id }); return; }
+    if (inc?.status === 'pending') { callback({ phase: 'pending-in', requestId: inc.id }); return; }
+    callback({ phase: 'none' });
+  };
+
+  const qOut = query(collection(db, 'vibeRequests'), where('fromUserId', '==', myUid), where('toUserId', '==', targetUid));
+  const unOut = onSnapshot(qOut, (snap) => {
+    out = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+    emit();
+  });
+
+  const qIn = query(collection(db, 'vibeRequests'), where('fromUserId', '==', targetUid), where('toUserId', '==', myUid));
+  const unIn = onSnapshot(qIn, (snap) => {
+    inc = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+    emit();
+  });
+
+  return () => { unOut(); unIn(); };
+}
+
+/* ─── Notifications ──────────────────────────────────────────── */
+
+export function subscribeNotifications(uid, callback) {
+  const q = query(
+    collection(db, 'notifications', uid, 'items'),
+    orderBy('createdAt', 'desc'),
+    limit(50),
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  });
+}
+
+export async function markNotificationRead(uid, notifId) {
+  await updateDoc(doc(db, 'notifications', uid, 'items', notifId), { read: true });
+}
+
+export async function markAllNotificationsRead(uid) {
+  const q = query(collection(db, 'notifications', uid, 'items'), where('read', '==', false));
+  const snap = await getDocs(q);
+  if (snap.empty) return;
+  const batch = writeBatch(db);
+  snap.forEach((d) => batch.update(d.ref, { read: true }));
+  await batch.commit();
+}
+
+/* ─── User search ─────────────────────────────────────────────── */
+export async function searchUsers(term) {
+  if (!term || term.trim().length < 2) return [];
+  const t = term.trim();
+  const tLower = t.toLowerCase();
+
+  const [nameSnap, usernameSnap] = await Promise.all([
+    getDocs(query(
+      collection(db, 'users'),
+      where('displayName', '>=', t),
+      where('displayName', '<=', t + ''),
+      limit(10)
+    )),
+    getDocs(query(
+      collection(db, 'users'),
+      where('username', '>=', tLower),
+      where('username', '<=', tLower + ''),
+      limit(10)
+    )),
+  ]);
+
+  const seen = new Set();
+  const results = [];
+  [...nameSnap.docs, ...usernameSnap.docs].forEach((d) => {
+    if (!seen.has(d.id)) {
+      seen.add(d.id);
+      results.push({ id: d.id, ...d.data() });
+    }
+  });
+  return results.slice(0, 10);
 }

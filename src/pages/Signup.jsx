@@ -33,7 +33,7 @@ function checkStrength(pw) {
 }
 
 const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong'];
-const STRENGTH_COLORS = ['', '#FF5A6A', '#FF8C42', '#F5C518', '#00CC88'];
+const STRENGTH_COLORS = ['', '#FF5A6A', '#FF8C42', '#F5C518', '#16A34A'];
 
 function PasswordStrengthBar({ password }) {
   const criteria = checkStrength(password);
@@ -70,6 +70,7 @@ export default function Signup() {
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
+  const [tosAgreed, setTosAgreed] = useState(false);
 
   const pwStrength = checkStrength(password);
   const pwScore = Object.values(pwStrength).filter(Boolean).length;
@@ -83,6 +84,7 @@ export default function Signup() {
 
   const handleStep1 = (e) => {
     e.preventDefault();
+    if (!tosAgreed) { showToast('Please agree to the Terms of Service', 'error'); return; }
     if (pwScore < 4) { showToast('Password must be Strong (8+ chars, uppercase, number, special)', 'error'); return; }
     if (password !== confirmPassword) { showToast('Passwords do not match', 'error'); return; }
     setStep(1);
@@ -175,7 +177,27 @@ export default function Signup() {
             {pwMismatch && <span style={{ fontSize: 12, color: 'var(--color-danger)' }}>Passwords do not match</span>}
           </div>
 
-          <button className="btn btn-primary btn-full" type="submit" disabled={!email || pwScore < 4 || !!pwMismatch} style={{ marginTop: 4 }}>
+          {/* ToS agreement */}
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginTop: 4 }}>
+            <input
+              type="checkbox"
+              checked={tosAgreed}
+              onChange={(e) => setTosAgreed(e.target.checked)}
+              style={{ width: 18, height: 18, marginTop: 2, accentColor: 'var(--color-primary)', flexShrink: 0, cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+              I have read and agree to the{' '}
+              <span
+                onClick={(e) => { e.preventDefault(); navigate('/terms'); }}
+                style={{ color: 'var(--color-primary)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Terms of Service
+              </span>
+              . I confirm I am 18 or older.
+            </span>
+          </label>
+
+          <button className="btn btn-primary btn-full" type="submit" disabled={!email || pwScore < 4 || !!pwMismatch || !tosAgreed} style={{ marginTop: 4 }}>
             Continue
           </button>
         </form>

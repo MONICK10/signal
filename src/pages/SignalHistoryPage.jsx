@@ -7,7 +7,7 @@ import EmptyState from '../components/EmptyState';
 
 const STATUS_STYLES = {
   pending:  { label: 'Pending',  bg: 'rgba(255,140,66,0.15)',  color: '#FF8C42' },
-  accepted: { label: 'Accepted', bg: 'rgba(0,200,160,0.15)',   color: '#00C8A0' },
+  accepted: { label: 'Accepted', bg: 'rgba(22,163,74,0.12)',   color: '#16A34A' },
   declined: { label: 'Declined', bg: 'rgba(255,51,85,0.15)',   color: '#FF3355' },
   expired:  { label: 'Expired',  bg: 'rgba(100,100,120,0.15)', color: '#888' },
 };
@@ -30,7 +30,7 @@ function AnonAvatar({ label }) {
 }
 
 function NamedAvatar({ name, gender }) {
-  const colors = { male: '#FF4B6E', female: '#00CC88', other: '#AA66FF' };
+  const colors = { male: '#3B82F6', female: '#A855F7', other: '#F59E0B' };
   const bg = colors[gender] || 'var(--color-primary)';
   return (
     <div style={{ width: 48, height: 48, borderRadius: '50%', background: bg, border: `2px solid ${bg}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 18, flexShrink: 0 }}>

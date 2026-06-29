@@ -17,7 +17,7 @@ import { app } from './config';
 
 export const auth = getAuth(app);
 
-export async function loginUser(email, password, remember = false) {
+export async function loginUser(email, password, remember = true) {
   await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
   return signInWithEmailAndPassword(auth, email, password);
 }
