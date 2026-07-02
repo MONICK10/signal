@@ -44,8 +44,8 @@ export default function SignalCard({ signal, onAccept, onDecline }) {
   const [acting, setActing] = useState(false);
 
   const isAnon = signal.anonymous;
-  const timeAgo = signal.createdAt?.toDate
-    ? formatDistanceToNow(signal.createdAt.toDate(), { addSuffix: true })
+  const timeAgo = signal.createdAt
+    ? formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true })
     : '';
 
   const handleAccept = async () => {

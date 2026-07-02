@@ -25,14 +25,10 @@ function timerColor(ms) {
 
 function getRemaining(chatData) {
   if (!chatData?.timerStartedAt) return chatData?.timerSeconds * 1000 || 300000;
-  const startMs = chatData.timerStartedAt.toDate
-    ? chatData.timerStartedAt.toDate().getTime()
-    : chatData.timerStartedAt.seconds * 1000;
+  const startMs = new Date(chatData.timerStartedAt).getTime();
   const totalMs = (chatData.timerSeconds || 300) * 1000;
   if (chatData.isPaused && chatData.pausedAt) {
-    const pausedMs = chatData.pausedAt.toDate
-      ? chatData.pausedAt.toDate().getTime()
-      : chatData.pausedAt.seconds * 1000;
+    const pausedMs = new Date(chatData.pausedAt).getTime();
     return Math.max(0, totalMs - (pausedMs - startMs));
   }
   return Math.max(0, totalMs - (Date.now() - startMs));

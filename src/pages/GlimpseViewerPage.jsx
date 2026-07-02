@@ -4,7 +4,7 @@ import { subscribeMyGlimpses, markGlimpseViewed, getUserProfile } from '../fireb
 
 function formatTimeLeft(expiresAt) {
   if (!expiresAt) return '';
-  const ms = expiresAt.toDate().getTime() - Date.now();
+  const ms = new Date(expiresAt).getTime() - Date.now();
   if (ms <= 0) return 'Expired';
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
@@ -31,8 +31,8 @@ export default function GlimpseViewerPage({ user }) {
   useEffect(() => {
     if (!targetUid) return;
     return subscribeMyGlimpses(targetUid, (all) => {
-      const active = all.filter((g) => g.expiresAt?.toDate() > now);
-      active.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+      const active = all.filter((g) => g.expiresAt && new Date(g.expiresAt) > now);
+      active.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
       setGlimpses(active);
       setLoading(false);
     });

@@ -1,11 +1,7 @@
 export function getAnonymousLabel(uid, signals) {
   const anonSignals = signals
     .filter((s) => s.anonymous && s.fromUid)
-    .sort((a, b) => {
-      const at = a.createdAt?.seconds || 0;
-      const bt = b.createdAt?.seconds || 0;
-      return at - bt;
-    });
+    .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
 
   const uidMap = {};
   let counter = 1;

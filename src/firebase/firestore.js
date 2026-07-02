@@ -93,20 +93,25 @@ const notifFromDb = (r) => !r ? null : ({
 });
 
 const locationFromDb = (r) => !r ? null : ({
+  id: r.user_id,
+  uid: r.user_id,
   lat: r.lat, lng: r.lng,
   fuzzyLat: r.fuzzy_lat, fuzzyLng: r.fuzzy_lng,
   expiresAt: r.expires_at,
-  uid: r.user_id,
 });
 
 // ── Realtime helper ────────────────────────────────────────────
+// Each call gets a unique channel name — Supabase returns the existing channel
+// if the name is reused, and calling .on() on an already-subscribed channel throws.
 function makeSub(channelName, tableName, filter, fetchFn, callback) {
+  const uniqueName = `${channelName}-${Math.random().toString(36).slice(2, 9)}`;
   fetchFn().then(callback);
-  let ch = supabase.channel(channelName);
   const opts = { event: '*', schema: 'public', table: tableName };
   if (filter) opts.filter = filter;
-  ch = ch.on('postgres_changes', opts, () => fetchFn().then(callback));
-  ch.subscribe();
+  const ch = supabase
+    .channel(uniqueName)
+    .on('postgres_changes', opts, () => fetchFn().then(callback))
+    .subscribe();
   return () => supabase.removeChannel(ch);
 }
 
@@ -192,12 +197,30 @@ export async function getLocation(uid) {
 
 export function subscribeNearbyUsers(callback) {
   const fetch = async () => {
-    const { data } = await supabase
+    const { data: locs } = await supabase
       .from('locations').select('*')
       .gt('expires_at', new Date().toISOString());
-    callback((data || []).map(locationFromDb));
+    if (!locs?.length) return [];
+    const uids = locs.map((l) => l.user_id);
+    const { data: profs } = await supabase
+      .from('profiles').select('id, display_name, photo_url, gender, vibe_tags, username')
+      .in('id', uids);
+    const profMap = Object.fromEntries((profs || []).map((p) => [p.id, p]));
+    return locs.map((r) => {
+      const p = profMap[r.user_id] || {};
+      return {
+        id: r.user_id, uid: r.user_id,
+        lat: r.lat, lng: r.lng,
+        expiresAt: r.expires_at,
+        displayName: p.display_name || null,
+        photoURL: p.photo_url || null,
+        gender: p.gender || null,
+        vibeTags: p.vibe_tags || [],
+        username: p.username || null,
+      };
+    });
   };
-  return makeSub('nearby-users', 'locations', null, fetch, (d) => d && callback(d));
+  return makeSub('nearby-users', 'locations', null, fetch, callback);
 }
 
 export function subscribeLocation(uid, callback) {
@@ -400,7 +423,7 @@ export function subscribeConnectionStatus(myUid, targetUid, callback) {
   };
 
   fetchAll();
-  const ch = supabase.channel(`conn-${myUid}-${targetUid}`)
+  const ch = supabase.channel(`conn-${myUid}-${targetUid}-${Math.random().toString(36).slice(2, 9)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'friends' }, fetchAll)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, fetchAll)
     .subscribe();
@@ -805,7 +828,7 @@ export function subscribeVibeStatus(myUid, targetUid, callback) {
   };
 
   fetchAll();
-  const ch = supabase.channel(`vibe-${myUid}-${targetUid}`)
+  const ch = supabase.channel(`vibe-${myUid}-${targetUid}-${Math.random().toString(36).slice(2, 9)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'vibe_requests' }, fetchAll)
     .subscribe();
   return () => supabase.removeChannel(ch);

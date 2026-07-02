@@ -43,9 +43,7 @@ function SignalHistoryCard({ signal, isReceived, allSignals }) {
   const isAnon = signal.anonymous;
   const anonLabel = isAnon ? getAnonymousLabel(signal.fromUid, allSignals) : null;
 
-  const date = signal.createdAt?.toDate
-    ? format(signal.createdAt.toDate(), "MMM d, yyyy · h:mm a")
-    : '';
+  const date = signal.createdAt ? format(new Date(signal.createdAt), "MMM d, yyyy · h:mm a") : '';
 
   const name = isAnon
     ? (isReceived ? anonLabel : signal.toDisplayName || 'Someone')

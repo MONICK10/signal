@@ -151,7 +151,7 @@ export default function FeedPage({ user, profile, unreadNotifCount = 0 }) {
     if (!user?.uid) return;
     return subscribeLocation(user.uid, (data) => {
       if (!data) { setAmVisible(false); return; }
-      const exp = data.expiresAt?.toDate?.() || null;
+      const exp = data.expiresAt ? new Date(data.expiresAt) : null;
       setAmVisible(!!exp && exp > new Date());
     });
   }, [user?.uid]);

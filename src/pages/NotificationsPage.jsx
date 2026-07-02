@@ -12,7 +12,7 @@ import { callRespondToVibeRequest } from '../firebase/functions';
 function timeAgo(ts) {
   if (!ts) return '';
   try {
-    const date = ts.toDate ? ts.toDate() : new Date(ts);
+    const date = new Date(ts);
     return formatDistanceToNow(date, { addSuffix: true });
   } catch {
     return '';

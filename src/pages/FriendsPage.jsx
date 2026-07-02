@@ -156,8 +156,8 @@ export default function FriendsPage({ user, profile: myProfile }) {
   }, [friends]);
 
   const now = new Date();
-  const activeMyGlimpses = myGlimpses.filter((g) => g.expiresAt?.toDate() > now);
-  const activeFriendGlimpses = friendGlimpses.filter((g) => g.expiresAt?.toDate() > now);
+  const activeMyGlimpses = myGlimpses.filter((g) => g.expiresAt && new Date(g.expiresAt) > now);
+  const activeFriendGlimpses = friendGlimpses.filter((g) => g.expiresAt && new Date(g.expiresAt) > now);
 
   // Which friends have active glimpses
   const friendsWithGlimpses = friends.filter((f) =>

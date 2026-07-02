@@ -24,7 +24,8 @@ export async function resendVerificationEmail() {
 
 export async function reloadUser() {
   const { data: { user } } = await supabase.auth.getUser();
-  return user;
+  if (!user) return null;
+  return { ...user, uid: user.id, emailVerified: !!user.email_confirmed_at };
 }
 
 export async function logoutUser() {

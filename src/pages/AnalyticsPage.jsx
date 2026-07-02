@@ -87,7 +87,7 @@ export default function AnalyticsPage({ user }) {
     const label = format(day, 'EEE');
     const dayStart = startOfDay(day).getTime();
     const dayEnd = dayStart + 86400000;
-    const toMs = (sig) => sig.createdAt?.toDate ? sig.createdAt.toDate().getTime() : (sig.createdAt?.seconds || 0) * 1000;
+    const toMs = (sig) => sig.createdAt ? new Date(sig.createdAt).getTime() : 0;
     return {
       day: label,
       received: received.filter((s) => { const t = toMs(s); return t >= dayStart && t < dayEnd; }).length,
@@ -98,10 +98,7 @@ export default function AnalyticsPage({ user }) {
   // Hour heatmap
   const hourCounts = Array(24).fill(0);
   received.forEach((s) => {
-    if (s.createdAt?.toDate) {
-      const h = s.createdAt.toDate().getHours();
-      hourCounts[h]++;
-    }
+    if (s.createdAt) hourCounts[new Date(s.createdAt).getHours()]++;
   });
   const maxHour = hourCounts.indexOf(Math.max(...hourCounts));
   const maxHourCount = Math.max(...hourCounts);

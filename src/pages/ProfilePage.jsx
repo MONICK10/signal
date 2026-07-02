@@ -134,9 +134,7 @@ function SignalHistoryEntry({ signal, isReceived, allReceivedSignals }) {
   const photoURL = isReceived && !isAnon ? signal.fromPhotoURL : null;
   const gender = isReceived && !isAnon ? signal.fromGender : null;
 
-  const date = signal.createdAt?.toDate
-    ? format(signal.createdAt.toDate(), 'MMM d · h:mm a')
-    : '';
+  const date = signal.createdAt ? format(new Date(signal.createdAt), 'MMM d · h:mm a') : '';
 
   return (
     <div style={{
@@ -186,7 +184,7 @@ function SignalHistorySection({ uid }) {
   }, [uid]);
 
   const allMerged = [...received.map((s) => ({ ...s, _type: 'received' })), ...sent.map((s) => ({ ...s, _type: 'sent' }))]
-    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
     .slice(0, 50);
 
   const displayList = tab === 'all'

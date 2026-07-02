@@ -112,10 +112,12 @@ export default function Signup() {
           gender,
           vibeTags: selectedTags,
         });
+        // Skip verify-email — go straight to onboarding
+        navigate('/onboarding', { replace: true });
+      } else {
+        // Email confirmation required — user must verify before continuing
+        navigate('/verify-email', { replace: true });
       }
-      // If no session, the DB trigger already created a minimal profile;
-      // remaining fields will be saved after the user confirms their email and logs in.
-      navigate('/verify-email', { replace: true });
     } catch (err) {
       setLoading(false);
       const msg = err.message?.includes('already registered') || err.message?.includes('already in use')
