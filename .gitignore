@@ -17,8 +17,12 @@ dist
 dist-ssr
 *.local
 
-# Firebase
-.firebase/
+# Capacitor native build outputs
+android/.gradle/
+android/app/build/
+ios/App/Pods/
+ios/App/App.xcworkspace/
+ios/DerivedData/
 
 # Editor directories and files
 .vscode/*

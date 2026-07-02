@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Cuelyn</string>
+    <string name="title_activity_main">Cuelyn</string>
+    <string name="package_name">com.cuelyn.app</string>
+    <string name="custom_url_scheme">com.cuelyn.app</string>
+</resources>
