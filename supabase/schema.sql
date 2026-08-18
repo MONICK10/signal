@@ -269,22 +269,6 @@ CREATE TABLE IF NOT EXISTS daily_signals (
 ALTER TABLE daily_signals ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "daily_signals_all" ON daily_signals FOR ALL USING (auth.uid() IS NOT NULL);
 
--- ── Glimpses ──────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS glimpses (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id),
-  media_url TEXT,
-  media_type TEXT,
-  expires_at TIMESTAMPTZ,
-  viewed_by UUID[] DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE glimpses ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "glimpses_select" ON glimpses FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "glimpses_insert" ON glimpses FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "glimpses_update" ON glimpses FOR UPDATE USING (auth.uid() IS NOT NULL);
-CREATE POLICY "glimpses_delete" ON glimpses FOR DELETE USING (auth.uid() = user_id);
-
 -- ── Vibe requests ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS vibe_requests (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -458,6 +442,5 @@ DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE locations;      EXCEPT
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE notifications;  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE vibe_requests;  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE follows;        EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE glimpses;       EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE profiles;       EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE posts;          EXCEPTION WHEN duplicate_object THEN NULL; END $$;

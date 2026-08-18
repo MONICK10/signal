@@ -30,8 +30,6 @@ import FollowersPage from './pages/FollowersPage';
 import FollowingPage from './pages/FollowingPage';
 import TermsPage from './pages/TermsPage';
 import LeaderboardPage from './pages/LeaderboardPage';
-import CreateGlimpsePage from './pages/CreateGlimpsePage';
-import GlimpseViewerPage from './pages/GlimpseViewerPage';
 import NotificationsPage from './pages/NotificationsPage';
 import MyVibePage from './pages/MyVibePage';
 import InstallPrompt from './components/InstallPrompt';
@@ -39,7 +37,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import NetworkBanner from './components/NetworkBanner';
 
 const AUTH_PAGES = ['/splash', '/login', '/signup', '/verify-email'];
-const NO_NAV_PAGES = [...AUTH_PAGES, '/chat/', '/messages/', '/onboarding', '/settings', '/edit-profile', '/followers/', '/following/', '/terms', '/glimpses/', '/my-vibe'];
+const NO_NAV_PAGES = [...AUTH_PAGES, '/chat/', '/messages/', '/onboarding', '/settings', '/edit-profile', '/followers/', '/following/', '/terms', '/my-vibe'];
 
 function AuthGuard({ children, user, loading }) {
   const navigate = useNavigate();
@@ -330,12 +328,6 @@ function AppShellInner() {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/leaderboard" element={
           <AuthGuard user={user} loading={loading}><LeaderboardPage user={user} /></AuthGuard>
-        } />
-        <Route path="/glimpses/create" element={
-          <AuthGuard user={user} loading={loading}><CreateGlimpsePage user={user} /></AuthGuard>
-        } />
-        <Route path="/glimpses/:uid" element={
-          <AuthGuard user={user} loading={loading}><GlimpseViewerPage user={user} /></AuthGuard>
         } />
         <Route path="/notifications" element={
           <AuthGuard user={user} loading={loading}><NotificationsPage user={user} /></AuthGuard>

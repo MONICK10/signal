@@ -755,50 +755,6 @@ export function subscribeMatches(uid, callback) {
   return makeSub(`matches-${uid}`, 'matches', null, fetch, callback);
 }
 
-// ── Glimpses ───────────────────────────────────────────────────
-const GLIMPSE_TTL_MS = 24 * 60 * 60 * 1000;
-
-export async function createGlimpse(userId, mediaUrl, mediaType) {
-  const expiresAt = new Date(Date.now() + GLIMPSE_TTL_MS).toISOString();
-  const { data, error } = await supabase.from('glimpses').insert({
-    user_id: userId, media_url: mediaUrl, media_type: mediaType,
-    expires_at: expiresAt, viewed_by: [],
-  }).select('id').single();
-  if (error) throw error;
-  return data.id;
-}
-
-export function subscribeMyGlimpses(userId, callback) {
-  const fetch = async () => {
-    const { data } = await supabase.from('glimpses').select('*')
-      .eq('user_id', userId).gt('expires_at', new Date().toISOString());
-    return (data || []).map((r) => ({ id: r.id, userId: r.user_id, mediaUrl: r.media_url, mediaType: r.media_type, expiresAt: r.expires_at, viewedBy: r.viewed_by, createdAt: r.created_at }));
-  };
-  return makeSub(`myglimp-${userId}`, 'glimpses', `user_id=eq.${userId}`, fetch, callback);
-}
-
-export function subscribeActiveGlimpses(friendUids, callback) {
-  if (!friendUids?.length) { callback([]); return () => {}; }
-  const fetch = async () => {
-    const { data } = await supabase.from('glimpses').select('*')
-      .in('user_id', friendUids).gt('expires_at', new Date().toISOString());
-    return (data || []).map((r) => ({ id: r.id, userId: r.user_id, mediaUrl: r.media_url, mediaType: r.media_type, expiresAt: r.expires_at, viewedBy: r.viewed_by, createdAt: r.created_at }));
-  };
-  return makeSub('active-glimpses', 'glimpses', null, fetch, callback);
-}
-
-export async function markGlimpseViewed(glimpseId, viewerUid) {
-  const { data } = await supabase.from('glimpses').select('viewed_by').eq('id', glimpseId).single();
-  const current = data?.viewed_by || [];
-  if (!current.includes(viewerUid)) {
-    await supabase.from('glimpses').update({ viewed_by: [...current, viewerUid] }).eq('id', glimpseId);
-  }
-}
-
-export async function deleteGlimpse(glimpseId) {
-  await supabase.from('glimpses').delete().eq('id', glimpseId);
-}
-
 // ── Vibe ───────────────────────────────────────────────────────
 export async function saveMyVibe(uid, content) {
   await supabase.from('private_vibes').upsert({ user_id: uid, content: content.trim(), updated_at: new Date().toISOString() });
