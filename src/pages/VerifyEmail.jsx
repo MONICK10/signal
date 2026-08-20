@@ -4,7 +4,7 @@ import Logo from '../components/Logo';
 import ThemeToggle from '../components/ThemeToggle';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../hooks/useAuth';
-import { reloadUser, resendVerificationEmail, logoutUser } from '../firebase/auth';
+import { reloadUser, resendVerificationEmail, logoutUser } from '../lib/auth';
 
 export default function VerifyEmail() {
   const navigate = useNavigate();

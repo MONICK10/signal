@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { subscribeNearbyUsers, getBlockedSet } from '../firebase/firestore';
+import { subscribeNearbyUsers, getBlockedSet } from '../lib/db';
 
 export function useNearbyUsers(currentUid) {
   const [nearbyUsers, setNearbyUsers] = useState([]);

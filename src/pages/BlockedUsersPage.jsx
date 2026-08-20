@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../components/Toast';
-import { getBlockedUsersWithProfiles, unblockUser } from '../firebase/firestore';
+import { getBlockedUsersWithProfiles, unblockUser } from '../lib/db';
 
 function Avatar({ name, photoURL, gender, size = 44 }) {
   const colors = { male: '#3B82F6', female: '#A855F7', other: '#F59E0B' };

@@ -4,7 +4,7 @@ import Logo from '../components/Logo';
 import ThemeToggle from '../components/ThemeToggle';
 import BottomSheet from '../components/BottomSheet';
 import { useToast } from '../components/Toast';
-import { loginUser, resetPassword } from '../firebase/auth';
+import { loginUser, resetPassword } from '../lib/auth';
 
 const ATTEMPTS_KEY = 'cuelyn_login_attempts';
 const MAX_ATTEMPTS = 5;

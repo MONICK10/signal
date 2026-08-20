@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../components/Toast';
-import { subscribeFriendMessages, sendFriendMessage, getUserProfile } from '../firebase/firestore';
+import { subscribeFriendMessages, sendFriendMessage, getUserProfile } from '../lib/db';
 
 function ChatBubble({ msg, isOwn, senderName }) {
   return (

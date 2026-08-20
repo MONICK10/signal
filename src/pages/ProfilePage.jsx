@@ -8,8 +8,8 @@ import { useToast } from '../components/Toast';
 import {
   updateUserProfile, setUsername, checkUsernameAvailable,
   getReceivedSignals, getSentSignals,
-} from '../firebase/firestore';
-import { uploadFile } from '../firebase/storage';
+} from '../lib/db';
+import { uploadFile } from '../lib/storage';
 import { getAnonymousLabel } from '../utils/anonymousLabels';
 
 const GENDER_COLORS = { male: 'var(--color-male)', female: 'var(--color-female)', other: 'var(--color-other)' };

@@ -1,10 +1,9 @@
 import { NavLink } from 'react-router-dom';
 
 const tabs = [
-  { to: '/feed',    label: 'Nearby',  icon: 'ti-map-pin' },
-  { to: '/map',     label: 'Map',     icon: 'ti-map-2' },
-  { to: '/friends', label: 'Chats',   icon: 'ti-messages', friendBadge: true },
-  { to: '/profile', label: 'Me',      icon: 'ti-user' },
+  { to: '/map',     label: 'Map',   icon: 'ti-map-2' },
+  { to: '/friends', label: 'Chat',  icon: 'ti-messages', friendBadge: true },
+  { to: '/profile', label: 'Me',    icon: 'ti-user' },
 ];
 
 export default function BottomNav({ unreadFriendRequests = 0 }) {

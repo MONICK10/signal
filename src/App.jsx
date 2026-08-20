@@ -5,22 +5,19 @@ import BottomNav from './components/BottomNav';
 import { useAuth } from './hooks/useAuth';
 import { useTheme } from './hooks/useTheme';
 import { usePushNotifications } from './hooks/usePushNotifications';
-import { subscribeSentSignals, subscribeFriendRequests, subscribeReceivedSignals, subscribeFriends, getLocation, subscribeNotifications } from './firebase/firestore';
+import { subscribeSentSignals, subscribeFriendRequests, subscribeReceivedSignals, subscribeFriends, getLocation, subscribeNotifications } from './lib/db';
 import { getDistanceKm } from './utils/distance';
 import Splash from './pages/Splash';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import VerifyEmail from './pages/VerifyEmail';
-import FeedPage from './pages/FeedPage';
 import MapPage from './pages/MapPage';
 import SignalsPage from './pages/SignalsPage';
-import MatchesPage from './pages/MatchesPage';
 import ProfilePage from './pages/ProfilePage';
 import ChatPage from './pages/ChatPage';
 import FriendsPage from './pages/FriendsPage';
 import FriendChatPage from './pages/FriendChatPage';
 import SignalHistoryPage from './pages/SignalHistoryPage';
-import AnalyticsPage from './pages/AnalyticsPage';
 import UserProfilePage from './pages/UserProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import BlockedUsersPage from './pages/BlockedUsersPage';
@@ -29,15 +26,13 @@ import EditProfilePage from './pages/EditProfilePage';
 import FollowersPage from './pages/FollowersPage';
 import FollowingPage from './pages/FollowingPage';
 import TermsPage from './pages/TermsPage';
-import LeaderboardPage from './pages/LeaderboardPage';
 import NotificationsPage from './pages/NotificationsPage';
-import MyVibePage from './pages/MyVibePage';
 import InstallPrompt from './components/InstallPrompt';
 import ErrorBoundary from './components/ErrorBoundary';
 import NetworkBanner from './components/NetworkBanner';
 
 const AUTH_PAGES = ['/splash', '/login', '/signup', '/verify-email'];
-const NO_NAV_PAGES = [...AUTH_PAGES, '/chat/', '/messages/', '/onboarding', '/settings', '/edit-profile', '/followers/', '/following/', '/terms', '/my-vibe'];
+const NO_NAV_PAGES = [...AUTH_PAGES, '/chat/', '/messages/', '/onboarding', '/settings', '/edit-profile', '/followers/', '/following/', '/terms'];
 
 function AuthGuard({ children, user, loading }) {
   const navigate = useNavigate();
@@ -263,7 +258,7 @@ function AppShellInner() {
   const isNoNav = NO_NAV_PAGES.some((p) => location.pathname.startsWith(p));
   const showNav = !isNoNav && !!user && user.emailVerified;
   const isOnboardingDone = localStorage.getItem('cuelyn_onboarding_complete') === 'true' || profile?.onboardingComplete === true;
-  const defaultRoute = !user ? '/splash' : !user.emailVerified ? '/verify-email' : !isOnboardingDone ? '/onboarding' : '/feed';
+  const defaultRoute = !user ? '/splash' : !user.emailVerified ? '/verify-email' : !isOnboardingDone ? '/onboarding' : '/map';
 
   return (
     <div className="app-shell">
@@ -274,17 +269,11 @@ function AppShellInner() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
 
-        <Route path="/feed" element={
-          <AuthGuard user={user} loading={loading}><FeedPage user={user} profile={profile} unreadNotifCount={unreadNotifCount} /></AuthGuard>
-        } />
         <Route path="/map" element={
-          <AuthGuard user={user} loading={loading}><ErrorBoundary><MapPage user={user} profile={profile} /></ErrorBoundary></AuthGuard>
+          <AuthGuard user={user} loading={loading}><ErrorBoundary><MapPage user={user} profile={profile} unreadNotifCount={unreadNotifCount} /></ErrorBoundary></AuthGuard>
         } />
         <Route path="/signals" element={
           <AuthGuard user={user} loading={loading}><SignalsPage user={user} /></AuthGuard>
-        } />
-        <Route path="/matches" element={
-          <AuthGuard user={user} loading={loading}><MatchesPage user={user} /></AuthGuard>
         } />
         <Route path="/profile" element={
           <AuthGuard user={user} loading={loading}><ProfilePage user={user} profile={profile} refreshProfile={refreshProfile} /></AuthGuard>
@@ -300,9 +289,6 @@ function AppShellInner() {
         } />
         <Route path="/signal-history" element={
           <AuthGuard user={user} loading={loading}><SignalHistoryPage user={user} /></AuthGuard>
-        } />
-        <Route path="/analytics" element={
-          <AuthGuard user={user} loading={loading}><AnalyticsPage user={user} /></AuthGuard>
         } />
         <Route path="/profile/:uid" element={
           <AuthGuard user={user} loading={loading}><UserProfilePage user={user} profile={profile} /></AuthGuard>
@@ -326,14 +312,8 @@ function AppShellInner() {
           <AuthGuard user={user} loading={loading}><FollowingPage user={user} /></AuthGuard>
         } />
         <Route path="/terms" element={<TermsPage />} />
-        <Route path="/leaderboard" element={
-          <AuthGuard user={user} loading={loading}><LeaderboardPage user={user} /></AuthGuard>
-        } />
         <Route path="/notifications" element={
           <AuthGuard user={user} loading={loading}><NotificationsPage user={user} /></AuthGuard>
-        } />
-        <Route path="/my-vibe" element={
-          <AuthGuard user={user} loading={loading}><MyVibePage user={user} /></AuthGuard>
         } />
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { subscribeReceivedSignals } from '../firebase/firestore';
+import { subscribeReceivedSignals } from '../lib/db';
 
 export function useSignals(uid) {
   const [signals, setSignals] = useState([]);

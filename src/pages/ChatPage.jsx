@@ -7,7 +7,7 @@ import {
   createFriendRequest, subscribeFriendRequestsByChatId,
   acceptFriendRequest, declineFriendRequest,
   getUserProfile,
-} from '../firebase/firestore';
+} from '../lib/db';
 import UserActionMenu from '../components/UserActionMenu';
 
 function formatTime(ms) {

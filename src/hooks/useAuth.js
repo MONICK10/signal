@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../firebase/config';
-import { getUserProfile, createUserProfile } from '../firebase/firestore';
+import { supabase } from '../lib/supabase';
+import { getUserProfile, createUserProfile } from '../lib/db';
 
 function normalizeUser(supabaseUser) {
   if (!supabaseUser) return null;

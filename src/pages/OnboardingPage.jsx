@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { updateUserProfile } from '../firebase/firestore';
+import { updateUserProfile } from '../lib/db';
 
 const SCREENS = [
   {

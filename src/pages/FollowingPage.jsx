@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   subscribeUserFollowingList, getUserProfile,
   unfollowUser, subscribeMyFollowing,
-} from '../firebase/firestore';
+} from '../lib/db';
 import { useToast } from '../components/Toast';
 
 const GENDER_COLOR = { male: '#3B82F6', female: '#A855F7', other: '#F59E0B' };

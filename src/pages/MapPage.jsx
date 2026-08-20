@@ -11,7 +11,7 @@ import { useToast } from '../components/Toast';
 import UserActionMenu from '../components/UserActionMenu';
 import { useNearbyUsers } from '../hooks/useNearbyUsers';
 import { useTheme } from '../hooks/useTheme';
-import { setLocation, updateLocation, deleteLocation, getLocation } from '../firebase/firestore';
+import { setLocation, updateLocation, deleteLocation, getLocation } from '../lib/db';
 import { fuzzyLocation } from '../utils/fuzzyLocation';
 import { getDistanceKm, formatDistance } from '../utils/distance';
 import { sendSignal } from '../utils/signalLimit';
@@ -183,7 +183,7 @@ function VisibilityPrompt({ onGoVisible, onDismiss }) {
   );
 }
 
-export default function MapPage({ user, profile }) {
+export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
   const navigate = useNavigate();
   const showToast = useToast();
   const { theme } = useTheme();
@@ -371,11 +371,14 @@ export default function MapPage({ user, profile }) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
-              onClick={() => navigate('/leaderboard')}
-              style={{ background: 'rgba(128,128,128,0.15)', border: 'none', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--color-text-primary)' }}
-              title="Nearby Leaderboard"
+              onClick={() => navigate('/notifications')}
+              style={{ position: 'relative', background: 'rgba(128,128,128,0.15)', border: 'none', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--color-text-primary)' }}
+              title="Notifications"
             >
-              <i className="ti ti-trophy" style={{ fontSize: 18 }} />
+              <i className="ti ti-bell" style={{ fontSize: 18 }} />
+              {unreadNotifCount > 0 && (
+                <span style={{ position: 'absolute', top: 5, right: 5, width: 8, height: 8, borderRadius: '50%', background: '#ef4444', border: '1.5px solid var(--color-bg)' }} />
+              )}
             </button>
             <ThemeToggle />
           </div>

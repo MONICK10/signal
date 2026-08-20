@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import BottomSheet from '../components/BottomSheet';
 import { useToast } from '../components/Toast';
 import { useTheme } from '../hooks/useTheme';
-import { updateUserProfile, submitProblemReport } from '../firebase/firestore';
-import { supabase } from '../firebase/config';
-import { logoutUser, changePassword, deleteAccount } from '../firebase/auth';
-import { deleteFriendList, deleteLocation } from '../firebase/firestore';
+import { updateUserProfile, submitProblemReport } from '../lib/db';
+import { supabase } from '../lib/supabase';
+import { logoutUser, changePassword, deleteAccount } from '../lib/auth';
+import { deleteFriendList, deleteLocation } from '../lib/db';
 
 // ─── How Cuelyn Works content ────────────────────────────────────
 const HOW_IT_WORKS = [
@@ -429,13 +429,6 @@ export default function SettingsPage({ user, profile, refreshProfile }) {
           right={<i className="ti ti-chevron-right" style={{ color: 'var(--color-text-secondary)', fontSize: 16 }} />}
         />
         <SettingsRow
-          icon="ti-crystal-ball"
-          label="My Vibe"
-          subtitle="Private text used for vibe match %"
-          onClick={() => navigate('/my-vibe')}
-          right={<i className="ti ti-chevron-right" style={{ color: 'var(--color-text-secondary)', fontSize: 16 }} />}
-        />
-        <SettingsRow
           icon="ti-lock"
           label="Change Password"
           onClick={() => setShowPasswordSheet(true)}
@@ -458,12 +451,6 @@ export default function SettingsPage({ user, profile, refreshProfile }) {
           label="Private Account"
           subtitle="Only friends can see your profile details"
           right={<Toggle value={profile?.isPrivate} onChange={() => togglePrivacy('isPrivate')} />}
-        />
-        <SettingsRow
-          icon="ti-trophy"
-          label="Show on Leaderboard"
-          subtitle="Appear on the nearby leaderboard when visible"
-          right={<Toggle value={!profile?.leaderboardOptOut} onChange={() => togglePrivacy('leaderboardOptOut')} />}
         />
         <SettingsRow
           icon="ti-ban"

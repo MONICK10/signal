@@ -4,8 +4,8 @@ import Logo from '../components/Logo';
 import ThemeToggle from '../components/ThemeToggle';
 import VibeTagChip from '../components/VibeTagChip';
 import { useToast } from '../components/Toast';
-import { registerUser } from '../firebase/auth';
-import { createUserProfile } from '../firebase/firestore';
+import { registerUser } from '../lib/auth';
+import { createUserProfile } from '../lib/db';
 
 const VIBE_TAGS = [
   'Café person', 'Quiet type', 'Music head', 'Gamer',

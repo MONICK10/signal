@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import BottomSheet from './BottomSheet';
 import { useToast } from './Toast';
-import { blockUser, reportUser } from '../firebase/firestore';
+import { blockUser, reportUser } from '../lib/db';
 
 const REPORT_REASONS = [
   'Harassment',

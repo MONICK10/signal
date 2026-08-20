@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../components/Toast';
 import EmptyState from '../components/EmptyState';
-import { subscribeFriends, removeFriend, ensureFriendChat } from '../firebase/firestore';
+import { subscribeFriends, removeFriend, ensureFriendChat } from '../lib/db';
 
 function Avatar({ photoURL, name, gender, size = 48 }) {
   const colors = { male: '#3B82F6', female: '#A855F7', other: '#F59E0B' };

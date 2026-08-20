@@ -4,7 +4,7 @@ import SignalCard from '../components/SignalCard';
 import EmptyState from '../components/EmptyState';
 import { useToast } from '../components/Toast';
 import { useSignals } from '../hooks/useSignals';
-import { acceptSignal, declineSignal } from '../firebase/firestore';
+import { acceptSignal, declineSignal } from '../lib/db';
 
 export default function SignalsPage({ user }) {
   const navigate = useNavigate();

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { getReceivedSignals, getSentSignals } from '../firebase/firestore';
+import { getReceivedSignals, getSentSignals } from '../lib/db';
 import { getAnonymousLabel } from '../utils/anonymousLabels';
 import EmptyState from '../components/EmptyState';
 

@@ -1,4 +1,4 @@
-import { checkGlobalSignalCooldown, setGlobalSignalCooldown, sendSignalDoc } from '../firebase/firestore';
+import { checkGlobalSignalCooldown, setGlobalSignalCooldown, sendSignalDoc } from '../lib/db';
 
 export async function sendSignal(fromUid, toUid, anonymous, profile, showToast) {
   try {

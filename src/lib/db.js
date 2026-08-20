@@ -1,6 +1,4 @@
-import { supabase } from './config';
-
-export { supabase as db };
+import { supabase } from './supabase';
 
 // ── Transform helpers ──────────────────────────────────────────
 const profileFromDb = (r) => !r ? null : ({
@@ -18,7 +16,6 @@ const profileFromDb = (r) => !r ? null : ({
   followingCount: r.following_count || 0,
   signalsReceivedTotal: r.signals_received_total || 0,
   isPrivate: r.is_private || false,
-  showOnLeaderboard: r.show_on_leaderboard !== false,
   onboardingComplete: r.onboarding_complete || false,
   notificationPrefs: r.notification_prefs || {},
   fcmTokens: r.fcm_tokens || [],
@@ -147,7 +144,6 @@ export async function updateUserProfile(uid, data) {
   if (data.username !== undefined)    row.username = data.username;
   if (data.vibeTags !== undefined)    row.vibe_tags = data.vibeTags;
   if (data.isPrivate !== undefined)   row.is_private = data.isPrivate;
-  if (data.showOnLeaderboard !== undefined) row.show_on_leaderboard = data.showOnLeaderboard;
   if (data.onboardingComplete !== undefined) row.onboarding_complete = data.onboardingComplete;
   if (data.notificationPrefs !== undefined) row.notification_prefs = data.notificationPrefs;
   if (data.lastSignalSentAt !== undefined)  row.last_signal_sent_at = data.lastSignalSentAt;
@@ -543,118 +539,6 @@ export async function getTotalSignalsReceived(uid) {
   return count || 0;
 }
 
-export async function getTotalMatches(uid) {
-  const { count: c1 } = await supabase.from('matches').select('*', { count: 'exact', head: true }).eq('user1', uid);
-  const { count: c2 } = await supabase.from('matches').select('*', { count: 'exact', head: true }).eq('user2', uid);
-  return (c1 || 0) + (c2 || 0);
-}
-
-// ── Posts ──────────────────────────────────────────────────────
-const PAGE_SIZE = 10;
-
-export function subscribeFeed(callback) {
-  const fetch = async () => {
-    const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
-    return data || [];
-  };
-  return makeSub('feed', 'posts', null, fetch, callback);
-}
-
-export function subscribeLatestPosts(callback, count = 40) {
-  const fetch = async () => {
-    const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false }).limit(count);
-    return data || [];
-  };
-  return makeSub('latest-posts', 'posts', null, fetch, callback);
-}
-
-export async function getPaginatedPosts(lastCreatedAt = null) {
-  let q = supabase.from('posts').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE);
-  if (lastCreatedAt) q = q.lt('created_at', lastCreatedAt);
-  const { data } = await q;
-  const posts = data || [];
-  return {
-    posts,
-    lastDoc: posts.length ? posts[posts.length - 1].created_at : null,
-    hasMore: posts.length === PAGE_SIZE,
-  };
-}
-
-export function subscribeUserPosts(uid, callback) {
-  const fetch = async () => {
-    const { data } = await supabase.from('posts').select('*')
-      .eq('uid', uid).order('created_at', { ascending: false });
-    return data || [];
-  };
-  return makeSub(`posts-${uid}`, 'posts', `uid=eq.${uid}`, fetch, callback);
-}
-
-export async function createPost(data) {
-  const { data: row, error } = await supabase.from('posts').insert({
-    uid: data.uid,
-    content: data.content,
-    likes: 0, comments_count: 0,
-  }).select('id').single();
-  if (error) throw error;
-  return row;
-}
-
-export async function deletePost(postId) {
-  await supabase.from('posts').delete().eq('id', postId);
-}
-
-export async function toggleLike(postId, uid, isLiked) {
-  if (isLiked) {
-    await supabase.from('post_likes').delete().eq('post_id', postId).eq('uid', uid);
-    const { data } = await supabase.from('posts').select('likes').eq('id', postId).single();
-    await supabase.from('posts').update({ likes: Math.max(0, (data?.likes || 1) - 1) }).eq('id', postId);
-  } else {
-    await supabase.from('post_likes').upsert({ post_id: postId, uid }, { onConflict: 'post_id,uid' });
-    const { data } = await supabase.from('posts').select('likes').eq('id', postId).single();
-    await supabase.from('posts').update({ likes: (data?.likes || 0) + 1 }).eq('id', postId);
-  }
-}
-
-export async function checkLiked(postId, uid) {
-  const { data } = await supabase.from('post_likes').select('uid').eq('post_id', postId).eq('uid', uid).maybeSingle();
-  return !!data;
-}
-
-export async function getLatestPost(uid) {
-  const { data } = await supabase.from('posts').select('*').eq('uid', uid)
-    .order('created_at', { ascending: false }).limit(1).maybeSingle();
-  return data;
-}
-
-// ── Comments ───────────────────────────────────────────────────
-export async function addComment(postId, uid, displayName, photoURL, gender, text) {
-  const { data, error } = await supabase.from('comments').insert({
-    post_id: postId, uid, display_name: displayName,
-    photo_url: photoURL || null, gender: gender || null, text: text.trim(),
-  }).select('id').single();
-  if (error) throw error;
-  const { data: p } = await supabase.from('posts').select('comments_count').eq('id', postId).single();
-  await supabase.from('posts').update({ comments_count: (p?.comments_count || 0) + 1 }).eq('id', postId);
-  return data.id;
-}
-
-export function subscribeComments(postId, callback) {
-  const fetch = async () => {
-    const { data } = await supabase.from('comments').select('*')
-      .eq('post_id', postId).order('created_at', { ascending: true });
-    return (data || []).map((r) => ({ id: r.id, uid: r.uid, displayName: r.display_name, photoURL: r.photo_url, gender: r.gender, text: r.text, createdAt: r.created_at }));
-  };
-  return makeSub(`comments-${postId}`, 'comments', `post_id=eq.${postId}`, fetch, callback);
-}
-
-export async function deleteComment(postId, commentId, uid) {
-  const { data } = await supabase.from('comments').select('uid').eq('id', commentId).maybeSingle();
-  if (!data || data.uid !== uid) return;
-  await supabase.from('comments').delete().eq('id', commentId);
-  const { data: p } = await supabase.from('posts').select('comments_count').eq('id', postId).single();
-  await supabase.from('posts').update({ comments_count: Math.max(0, (p?.comments_count || 1) - 1) }).eq('id', postId);
-}
-
 // ── Block / Report ─────────────────────────────────────────────
 export async function blockUser(myUid, targetUid) {
   await supabase.from('blocks').upsert({ user_id: myUid, blocked_uid: targetUid, blocked_at: new Date().toISOString() });
@@ -739,55 +623,6 @@ export function subscribeUserFollowingList(uid, callback) {
     return (data || []).map((r) => r.following_id);
   };
   return makeSub(`following-list-${uid}`, 'follows', `follower_id=eq.${uid}`, fetch, callback);
-}
-
-// ── Matches (legacy) ───────────────────────────────────────────
-export function subscribeMatches(uid, callback) {
-  const fetch = async () => {
-    const [{ data: d1 }, { data: d2 }] = await Promise.all([
-      supabase.from('matches').select('*').eq('user1', uid),
-      supabase.from('matches').select('*').eq('user2', uid),
-    ]);
-    const all = [...(d1 || []), ...(d2 || [])];
-    all.sort((a, b) => new Date(b.matched_at) - new Date(a.matched_at));
-    return all;
-  };
-  return makeSub(`matches-${uid}`, 'matches', null, fetch, callback);
-}
-
-// ── Vibe ───────────────────────────────────────────────────────
-export async function saveMyVibe(uid, content) {
-  await supabase.from('private_vibes').upsert({ user_id: uid, content: content.trim(), updated_at: new Date().toISOString() });
-}
-
-export async function getMyVibe(uid) {
-  const { data } = await supabase.from('private_vibes').select('*').eq('user_id', uid).maybeSingle();
-  return data ? { content: data.content, updatedAt: data.updated_at } : null;
-}
-
-export function subscribeVibeStatus(myUid, targetUid, callback) {
-  let out = null, inc = null;
-  const emit = () => {
-    const accepted = [out, inc].find((r) => r?.status === 'accepted');
-    if (accepted) { callback({ phase: 'result', score: accepted.score ?? null, requestId: accepted.id }); return; }
-    if (out?.status === 'pending') { callback({ phase: 'pending-out', requestId: out.id }); return; }
-    if (inc?.status === 'pending') { callback({ phase: 'pending-in', requestId: inc.id }); return; }
-    callback({ phase: 'none' });
-  };
-
-  const fetchAll = async () => {
-    const [{ data: o }, { data: i }] = await Promise.all([
-      supabase.from('vibe_requests').select('*').eq('from_user_id', myUid).eq('to_user_id', targetUid).maybeSingle(),
-      supabase.from('vibe_requests').select('*').eq('from_user_id', targetUid).eq('to_user_id', myUid).maybeSingle(),
-    ]);
-    out = o; inc = i; emit();
-  };
-
-  fetchAll();
-  const ch = supabase.channel(`vibe-${myUid}-${targetUid}-${Math.random().toString(36).slice(2, 9)}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'vibe_requests' }, fetchAll)
-    .subscribe();
-  return () => supabase.removeChannel(ch);
 }
 
 // ── Notifications ──────────────────────────────────────────────

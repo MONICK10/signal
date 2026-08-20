@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import BottomSheet from '../components/BottomSheet';
 import VibeTagChip from '../components/VibeTagChip';
 import { useToast } from '../components/Toast';
-import { updateUserProfile, checkUsernameAvailable, setUsername } from '../firebase/firestore';
+import { updateUserProfile, checkUsernameAvailable, setUsername } from '../lib/db';
 
 const VIBE_TAGS = [
   'Café person', 'Quiet type', 'Music head', 'Gamer',

@@ -9,9 +9,7 @@ import {
   subscribeMyFollowing,
   subscribeConnectionStatus, createFriendRequest, cancelFriendRequest,
   acceptFriendRequest, declineFriendRequest,
-  subscribeVibeStatus,
-} from '../firebase/firestore';
-import { callSendVibeRequest } from '../firebase/functions';
+} from '../lib/db';
 import { sendSignal } from '../utils/signalLimit';
 
 const GENDER_COLOR = { male: '#3B82F6', female: '#A855F7', other: '#F59E0B' };
@@ -72,11 +70,6 @@ export default function UserProfilePage({ user, profile: myProfile }) {
   // Real-time connection status: isFriend, outgoing request, incoming request
   const [conn, setConn] = useState({ isFriend: false, outgoing: null, incoming: null });
 
-  // Vibe check state
-  const [vibePhase, setVibePhase] = useState('none'); // 'none'|'pending-out'|'pending-in'|'result'
-  const [vibeScore, setVibeScore] = useState(null);
-  const [vibeLoading, setVibeLoading] = useState(false);
-
   const isOwnProfile = targetUid === user?.uid;
 
   useEffect(() => {
@@ -105,14 +98,6 @@ export default function UserProfilePage({ user, profile: myProfile }) {
     if (!user?.uid) return;
     return subscribeMyFollowing(user.uid, (set) => setIFollow(set.has(targetUid)));
   }, [user?.uid, targetUid]);
-
-  useEffect(() => {
-    if (!user?.uid || !targetUid || isOwnProfile) return;
-    return subscribeVibeStatus(user.uid, targetUid, ({ phase, score }) => {
-      setVibePhase(phase);
-      setVibeScore(score ?? null);
-    });
-  }, [user?.uid, targetUid, isOwnProfile]);
 
   const handleFollowToggle = async () => {
     setFollowLoading(true);
@@ -184,18 +169,6 @@ export default function UserProfilePage({ user, profile: myProfile }) {
     finally { setConnLoading(false); }
   };
 
-  const handleVibeCheck = async () => {
-    setVibeLoading(true);
-    try {
-      await callSendVibeRequest({ toUserId: targetUid });
-      showToast('Vibe check sent!', 'success');
-    } catch (e) {
-      showToast(e.message || 'Failed to send vibe check', 'error');
-    } finally {
-      setVibeLoading(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -223,52 +196,6 @@ export default function UserProfilePage({ user, profile: myProfile }) {
   const genderColor = GENDER_COLOR[targetProfile.gender] || 'var(--color-primary)';
   const { isFriend, outgoing, incoming } = conn;
   const isPrivate = targetProfile.isPrivate && !iFollow && !isFriend;
-
-  function renderVibeButton() {
-    if (vibePhase === 'result' && vibeScore != null) {
-      const color = vibeScore >= 70 ? '#10b981' : vibeScore >= 40 ? 'var(--color-primary)' : 'var(--color-text-secondary)';
-      return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '12px 16px', background: 'var(--color-surface-2)', borderRadius: 14, border: '1px solid var(--color-border)' }}>
-          <span style={{ fontSize: 20 }}>🔮</span>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontWeight: 800, fontSize: 22, color, lineHeight: 1 }}>{vibeScore}%</div>
-            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>vibe match</div>
-          </div>
-        </div>
-      );
-    }
-    if (vibePhase === 'pending-out') {
-      return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'var(--color-surface-2)', borderRadius: 14, border: '1px solid var(--color-border)' }}>
-          <i className="ti ti-clock" style={{ fontSize: 16, color: 'var(--color-text-secondary)' }} />
-          <span style={{ fontSize: 14, color: 'var(--color-text-secondary)', fontWeight: 500 }}>Vibe check pending…</span>
-        </div>
-      );
-    }
-    if (vibePhase === 'pending-in') {
-      return (
-        <button
-          onClick={() => navigate('/notifications')}
-          className="btn btn-secondary"
-          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-        >
-          <span>🔮</span> Respond to Vibe Check
-        </button>
-      );
-    }
-    return (
-      <button
-        onClick={handleVibeCheck}
-        disabled={vibeLoading}
-        className="btn btn-secondary"
-        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-      >
-        {vibeLoading
-          ? <span className="spinner" style={{ width: 18, height: 18 }} />
-          : <><span>🔮</span> Vibe Check</>}
-      </button>
-    );
-  }
 
   function renderFriendButton() {
     if (isFriend) {
@@ -404,8 +331,6 @@ export default function UserProfilePage({ user, profile: myProfile }) {
           </div>
           {/* Follow row */}
           <FollowButton iFollow={iFollow} theyFollow={theyFollow} loading={followLoading} onClick={handleFollowToggle} />
-          {/* Vibe Check row */}
-          {!isPrivate && renderVibeButton()}
         </div>
 
         {/* Stats */}
