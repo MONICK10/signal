@@ -13,7 +13,7 @@ import { useNearbyUsers } from '../hooks/useNearbyUsers';
 import { useTheme } from '../hooks/useTheme';
 import { setLocation, updateLocation, deleteLocation, getLocation } from '../lib/db';
 import { fuzzyLocation } from '../utils/fuzzyLocation';
-import { getDistanceKm, formatDistance } from '../utils/distance';
+import { getDistanceKm, fuzzyDistance } from '../utils/distance';
 import { sendSignal } from '../utils/signalLimit';
 
 
@@ -26,6 +26,12 @@ function genderBorderColor(gender) {
   if (gender === 'male')   return '#3B82F6';
   if (gender === 'female') return '#A855F7';
   return '#F59E0B';
+}
+
+function genderGlowRgb(gender) {
+  if (gender === 'male')   return '59,130,246';
+  if (gender === 'female') return '168,85,247';
+  return '245,158,11';
 }
 
 function offsetDuplicates(users) {
@@ -46,16 +52,19 @@ function offsetDuplicates(users) {
   });
 }
 
-function makeMarkerIcon(u) {
+function makeMarkerIcon(u, distanceKm) {
   const color = genderBorderColor(u.gender);
+  const glow = genderGlowRgb(u.gender);
   const firstName = (u.firstName || 'U').split(' ')[0];
+  const distLabel = distanceKm != null ? fuzzyDistance(distanceKm) : null;
   const html = renderToStaticMarkup(
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, animation: 'markerAppear 0.3s ease' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, animation: 'markerAppear 0.3s ease' }}>
       <div style={{
         width: 56, height: 56, borderRadius: '50%',
-        border: `3px solid ${color}`, overflow: 'hidden',
+        border: `2.5px solid ${color}`, overflow: 'hidden',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: color, boxSizing: 'border-box', flexShrink: 0,
+        boxShadow: `0 0 0 4px rgba(${glow},0.14), 0 0 18px -2px rgba(${glow},0.6)`,
       }}>
         {u.photoURL
           ? <img src={u.photoURL} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
@@ -63,14 +72,19 @@ function makeMarkerIcon(u) {
         }
       </div>
       <div style={{
-        background: 'rgba(0,0,0,0.65)', color: '#fff',
-        borderRadius: 20, padding: '2px 8px',
-        fontSize: 11, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif",
-        whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis',
-      }}>{firstName}</div>
+        background: 'rgba(24,8,14,0.82)', color: '#F9F0F3',
+        border: '1px solid rgba(251,113,133,0.22)',
+        borderRadius: 20, padding: '3px 10px',
+        fontSize: 11, fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif",
+        whiteSpace: 'nowrap', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis',
+        display: 'flex', alignItems: 'center', gap: 5,
+      }}>
+        <span>{firstName}</span>
+        {distLabel && <span style={{ opacity: 0.6, fontWeight: 600 }}>· {distLabel}</span>}
+      </div>
     </div>
   );
-  return divIcon({ html, className: '', iconSize: [80, 84], iconAnchor: [40, 68] });
+  return divIcon({ html, className: '', iconSize: [90, 90], iconAnchor: [45, 72] });
 }
 
 function CurrentUserIcon(profile) {
@@ -358,11 +372,16 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
             <Marker
               key={u.id}
               position={[u.lat, u.lng]}
-              icon={makeMarkerIcon(u)}
+              icon={makeMarkerIcon(u, userCoordsRef.current
+                ? getDistanceKm(userCoordsRef.current.lat, userCoordsRef.current.lng, u.lat, u.lng)
+                : null)}
               eventHandlers={{ click: () => { setSelectedUser(u); setAnonymous(false); } }}
             />
           ))}
         </MapContainer>
+
+        {/* Warm ambient glow over the tiles — keeps the map from reading as a stock Leaflet embed */}
+        <div className="map-glow-overlay" />
 
         {/* Top bar */}
         <div className="map-topbar">
@@ -429,16 +448,25 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* Target user info */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{
-                width: 60, height: 60, borderRadius: '50%',
-                border: `3px solid ${genderBorderColor(selectedUser.gender)}`,
-                overflow: 'hidden', background: genderBorderColor(selectedUser.gender),
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              }}>
-                {selectedUser.photoURL
-                  ? <img src={selectedUser.photoURL} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
-                  : <span style={{ color: '#fff', fontWeight: 700, fontSize: 22 }}>{(selectedUser.firstName || '?')[0].toUpperCase()}</span>
-                }
+              <div style={{ position: 'relative', width: 60, height: 60, flexShrink: 0 }}>
+                {sendingSignal && (
+                  <span style={{
+                    position: 'absolute', inset: -3, borderRadius: '50%',
+                    border: `1.5px solid ${genderBorderColor(selectedUser.gender)}`,
+                    animation: 'pulse-ring 1.1s ease-out infinite',
+                  }} />
+                )}
+                <div style={{
+                  width: 60, height: 60, borderRadius: '50%',
+                  border: `3px solid ${genderBorderColor(selectedUser.gender)}`,
+                  overflow: 'hidden', background: genderBorderColor(selectedUser.gender),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {selectedUser.photoURL
+                    ? <img src={selectedUser.photoURL} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+                    : <span style={{ color: '#fff', fontWeight: 700, fontSize: 22 }}>{(selectedUser.firstName || '?')[0].toUpperCase()}</span>
+                  }
+                </div>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 17 }}>{selectedUser.firstName}</div>
@@ -448,7 +476,7 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
                 </div>
                 {distanceToSelected !== null && (
                   <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4 }}>
-                    {formatDistance(distanceToSelected)}
+                    {fuzzyDistance(distanceToSelected)} away
                   </div>
                 )}
               </div>

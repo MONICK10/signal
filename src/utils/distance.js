@@ -10,8 +10,20 @@ export function getDistanceKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function formatDistance(km) {
-  const m = Math.round(km * 1000);
-  if (m < 1000) return `~${m} meters away`;
-  return `~${km.toFixed(1)} km away`;
+// Coarse distance bands for anyone who isn't a mutual friend — never the
+// precise figure, so the label can't be used to narrow down a fuzzed position.
+const DISTANCE_BUCKETS = [
+  { max: 0.15, label: 'Nearby' },
+  { max: 0.3,  label: '~200m' },
+  { max: 0.5,  label: '~400m' },
+  { max: 0.75, label: '~600m' },
+  { max: 1,    label: '~800m' },
+  { max: 2,    label: '~1.5km' },
+  { max: 3,    label: '~2.5km' },
+  { max: 5,    label: '~4km' },
+];
+
+export function fuzzyDistance(km) {
+  const bucket = DISTANCE_BUCKETS.find((b) => km <= b.max);
+  return bucket ? bucket.label : '5km+';
 }
