@@ -110,7 +110,7 @@ export default function UserActionMenu({ myUid, targetUid, targetName, onBlock, 
                     <button
                       key={r}
                       onClick={() => { setReason(r); if (r !== 'Other') setReportStep(2); else setReportStep(2); }}
-                      style={{ padding: '12px 16px', background: reason === r ? 'rgba(225,29,72,0.10)' : 'var(--color-surface)', border: `1.5px solid ${reason === r ? 'var(--color-primary)' : 'var(--color-border)'}`, borderRadius: 12, cursor: 'pointer', textAlign: 'left', fontWeight: reason === r ? 600 : 400, color: 'var(--color-text-primary)', fontSize: 14 }}
+                      style={{ padding: '12px 16px', background: reason === r ? 'rgba(47,111,237,0.10)' : 'var(--color-surface)', border: `1.5px solid ${reason === r ? 'var(--color-primary)' : 'var(--color-border)'}`, borderRadius: 12, cursor: 'pointer', textAlign: 'left', fontWeight: reason === r ? 600 : 400, color: 'var(--color-text-primary)', fontSize: 14 }}
                     >
                       {r}
                     </button>

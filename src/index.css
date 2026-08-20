@@ -1,38 +1,38 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 @import 'leaflet/dist/leaflet.css';
 
-/* ─── Design Tokens — Cuelyn (Rose Brand) ────────────────────── */
+/* ─── Design Tokens — Cuelyn (Signal Blue) ───────────────────── */
 :root {
   /* Surfaces */
   --color-bg:        #FFFFFF;
   --color-surface:   #FFFFFF;
-  --color-surface-2: #FFF1F3;
+  --color-surface-2: #EEF4FF;
 
   /* Brand */
-  --color-primary:      #E11D48;
-  --color-primary-dark: #BE123C;
-  --color-accent:       #FB7185;
+  --color-primary:      #2F6FED;
+  --color-primary-dark: #1D4ED8;
+  --color-accent:       #7CA8FF;
 
   /* Text */
-  --color-text-primary:   #1A0810;
-  --color-text-secondary: #7E6872;
+  --color-text-primary:   #101828;
+  --color-text-secondary: #667085;
 
   /* Structure */
-  --color-border: #EDE0E3;
+  --color-border: #E4E9F2;
 
   /* Semantic */
   --color-success:      #16A34A;
   --color-danger:       #DC2626;
-  --color-notification: #E11D48;
+  --color-notification: #2F6FED;
 
   /* Gender */
   --color-male:   #3B82F6;
   --color-female: #A855F7;
   --color-other:  #F59E0B;
 
-  /* Brand header — deep crimson */
-  --color-brand-header:     #9F1239;
-  --color-brand-header-alt: #881337;
+  /* Brand header — deep royal blue */
+  --color-brand-header:     #1E3A8A;
+  --color-brand-header-alt: #172554;
 
   --radius-sm:   8px;
   --radius-md:   12px;
@@ -40,32 +40,32 @@
   --radius-xl:   24px;
   --radius-full: 9999px;
 
-  --glow-primary: 0 4px 20px rgba(225, 29, 72, 0.25);
-  --glow-accent:  0 4px 20px rgba(225, 29, 72, 0.12);
+  --glow-primary: 0 4px 20px rgba(47, 111, 237, 0.25);
+  --glow-accent:  0 4px 20px rgba(47, 111, 237, 0.12);
 }
 
 [data-theme="dark"] {
   /* Surfaces */
-  --color-bg:        #18080E;
-  --color-surface:   #220D13;
-  --color-surface-2: #2D1018;
+  --color-bg:        #0A0F1A;
+  --color-surface:   #101827;
+  --color-surface-2: #16203A;
 
   /* Brand */
-  --color-primary:      #FB7185;
-  --color-primary-dark: #E11D48;
-  --color-accent:       #FDA4AF;
+  --color-primary:      #7CA8FF;
+  --color-primary-dark: #5B8DEF;
+  --color-accent:       #AEC8FF;
 
   /* Text */
-  --color-text-primary:   #F9F0F3;
-  --color-text-secondary: #A08090;
+  --color-text-primary:   #F1F5FB;
+  --color-text-secondary: #94A3B8;
 
   /* Structure */
-  --color-border: #3D1525;
+  --color-border: #223049;
 
   /* Semantic */
   --color-success:      #4ADE80;
   --color-danger:       #F87171;
-  --color-notification: #FB7185;
+  --color-notification: #7CA8FF;
 
   /* Gender */
   --color-male:   #60A5FA;
@@ -73,11 +73,11 @@
   --color-other:  #FCD34D;
 
   /* Brand header */
-  --color-brand-header:     #0A0306;
-  --color-brand-header-alt: #060103;
+  --color-brand-header:     #060B16;
+  --color-brand-header-alt: #03060D;
 
-  --glow-primary: 0 4px 20px rgba(251, 113, 133, 0.30);
-  --glow-accent:  0 4px 20px rgba(251, 113, 133, 0.15);
+  --glow-primary: 0 4px 20px rgba(124, 168, 255, 0.30);
+  --glow-accent:  0 4px 20px rgba(124, 168, 255, 0.15);
 }
 
 /* ─── Reset & Base ───────────────────────────────────────────── */
@@ -191,18 +191,18 @@ p  { font-size: 16px; line-height: 1.6; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(225, 29, 72, 0.06);
+  background: rgba(47, 111, 237, 0.06);
   color: var(--color-primary);
   border-radius: var(--radius-full);
   padding: 6px 14px;
   font-size: 13px;
   font-weight: 500;
-  border: 1px solid rgba(225, 29, 72, 0.18);
+  border: 1px solid rgba(47, 111, 237, 0.18);
   cursor: default;
 }
 [data-theme="dark"] .chip {
-  background: rgba(251, 113, 133, 0.10);
-  border-color: rgba(251, 113, 133, 0.22);
+  background: rgba(124, 168, 255, 0.10);
+  border-color: rgba(124, 168, 255, 0.22);
 }
 
 /* ─── Badge ──────────────────────────────────────────────────── */
@@ -290,12 +290,16 @@ p  { font-size: 16px; line-height: 1.6; }
 .map-container { flex: 1; position: relative; }
 .leaflet-map { width: 100%; height: 100%; }
 
-.map-glow-overlay { position: absolute; inset: 0; z-index: 350; pointer-events: none; }
+/* A light touch only — OpenTopoMap tiles carry their own color, this just
+   frames the screen and ties it back to the brand blue at the edges. */
+.map-glow-overlay {
+  position: absolute; inset: 0; z-index: 350; pointer-events: none;
+  background: radial-gradient(140% 100% at 50% 0%, rgba(47,111,237,0.10), transparent 45%);
+  box-shadow: inset 0 0 90px 24px rgba(16,24,40,0.18);
+}
 [data-theme="dark"] .map-glow-overlay {
-  background:
-    radial-gradient(120% 90% at 18% 12%, rgba(251,113,133,0.10), transparent 55%),
-    radial-gradient(90% 70% at 85% 85%, rgba(96,165,250,0.07), transparent 55%);
-  box-shadow: inset 0 0 140px 50px rgba(24,8,14,0.5);
+  background: radial-gradient(140% 100% at 50% 0%, rgba(124,168,255,0.14), transparent 45%);
+  box-shadow: inset 0 0 100px 30px rgba(10,15,26,0.55);
 }
 
 .map-topbar {

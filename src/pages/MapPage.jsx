@@ -10,15 +10,17 @@ import VibeTagChip from '../components/VibeTagChip';
 import { useToast } from '../components/Toast';
 import UserActionMenu from '../components/UserActionMenu';
 import { useNearbyUsers } from '../hooks/useNearbyUsers';
-import { useTheme } from '../hooks/useTheme';
 import { setLocation, updateLocation, deleteLocation, getLocation } from '../lib/db';
 import { fuzzyLocation } from '../utils/fuzzyLocation';
 import { getDistanceKm, fuzzyDistance } from '../utils/distance';
 import { sendSignal } from '../utils/signalLimit';
 
 
-const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const TILE_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+// OpenTopoMap: free, no API key. Native tiles only go to zoom 17 — maxNativeZoom
+// below tells Leaflet to upscale those instead of requesting tiles that don't exist.
+const TILE_URL = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
+const TILE_ATTRIBUTION = '© OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)';
+const TILE_MAX_NATIVE_ZOOM = 17;
 const VISIBLE_DURATION_MS = 2 * 60 * 60 * 1000;
 const NEARBY_RADIUS_KM = 5;
 
@@ -72,8 +74,8 @@ function makeMarkerIcon(u, distanceKm) {
         }
       </div>
       <div style={{
-        background: 'rgba(24,8,14,0.82)', color: '#F9F0F3',
-        border: '1px solid rgba(251,113,133,0.22)',
+        background: 'rgba(10,15,26,0.82)', color: '#F1F5FB',
+        border: '1px solid rgba(124,168,255,0.22)',
         borderRadius: 20, padding: '3px 10px',
         fontSize: 11, fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif",
         whiteSpace: 'nowrap', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis',
@@ -157,7 +159,7 @@ function SignalModeCard({ title, icon, subtitle, description, selected, onClick 
       style={{
         flex: 1, padding: '16px 12px', borderRadius: 16, cursor: 'pointer',
         border: `2px solid ${selected ? 'var(--color-primary)' : 'var(--color-border)'}`,
-        background: selected ? 'rgba(225,29,72,0.08)' : 'var(--color-surface)',
+        background: selected ? 'rgba(47,111,237,0.08)' : 'var(--color-surface)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
         transition: 'all 0.2s',
       }}
@@ -200,8 +202,6 @@ function VisibilityPrompt({ onGoVisible, onDismiss }) {
 export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
   const navigate = useNavigate();
   const showToast = useToast();
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
 
   const [userCoords, setUserCoords] = useState(null);
   const userCoordsRef = useRef(null);
@@ -365,7 +365,12 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
           zoomControl={false}
           style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
         >
-          <TileLayer url={isDark ? TILE_DARK : TILE_LIGHT} maxZoom={19} />
+          <TileLayer
+            url={TILE_URL}
+            attribution={TILE_ATTRIBUTION}
+            maxZoom={19}
+            maxNativeZoom={TILE_MAX_NATIVE_ZOOM}
+          />
           {userCoords && <RecenterMap coords={userCoords} />}
           {userCoords && visible && <Marker position={[userCoords.lat, userCoords.lng]} icon={CurrentUserIcon(profile)} />}
           {nearbyUsers.map((u) => (

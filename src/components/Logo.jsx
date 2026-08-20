@@ -6,17 +6,17 @@ function Icon({ px }) {
     <svg width={px} height={px} viewBox="0 0 88 88" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id={`front_${id}`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#FB7185" />
-          <stop offset="50%" stopColor="#E11D48" />
-          <stop offset="100%" stopColor="#9F1239" />
+          <stop offset="0%" stopColor="#7CA8FF" />
+          <stop offset="50%" stopColor="#2F6FED" />
+          <stop offset="100%" stopColor="#1E3A8A" />
         </linearGradient>
         <linearGradient id={`right_${id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#9F1239" />
-          <stop offset="100%" stopColor="#7F1D3B" />
+          <stop offset="0%" stopColor="#1E3A8A" />
+          <stop offset="100%" stopColor="#172554" />
         </linearGradient>
         <linearGradient id={`bottom_${id}`} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#7F1D3B" />
-          <stop offset="100%" stopColor="#6B1632" />
+          <stop offset="0%" stopColor="#172554" />
+          <stop offset="100%" stopColor="#0B1330" />
         </linearGradient>
       </defs>
 
@@ -68,7 +68,7 @@ export default function Logo({ variant = 'icon', size = 'md' }) {
           fontWeight="800"
           fontSize={iconPx * 0.52}
           letterSpacing="-1"
-          fill={isDark ? '#FFFFFF' : '#1A0810'}
+          fill={isDark ? '#FFFFFF' : '#101828'}
         >
           Cuelyn
         </text>
@@ -79,7 +79,7 @@ export default function Logo({ variant = 'icon', size = 'md' }) {
           fontWeight="600"
           fontSize={iconPx * 0.17}
           letterSpacing="2.2"
-          fill={isDark ? 'rgba(255,255,255,0.5)' : '#7E6872'}
+          fill={isDark ? 'rgba(255,255,255,0.5)' : '#667085'}
         >
           NOTICE · CUELYN · CONNECT
         </text>
