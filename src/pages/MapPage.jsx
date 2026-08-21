@@ -9,8 +9,12 @@ import BottomSheet from '../components/BottomSheet';
 import VibeTagChip from '../components/VibeTagChip';
 import { useToast } from '../components/Toast';
 import UserActionMenu from '../components/UserActionMenu';
+import NotePostSheet from '../components/NotePostSheet';
+import NotesListSheet from '../components/NotesListSheet';
+import { makeNoteMarkerIcon } from '../components/NoteMarker';
 import { useNearbyUsers } from '../hooks/useNearbyUsers';
-import { setLocation, updateLocation, deleteLocation, getLocation } from '../lib/db';
+import { useNotes } from '../hooks/useNotes';
+import { setLocation, updateLocation, deleteLocation, getLocation, postNote, deleteNote, reportNote } from '../lib/db';
 import { fuzzyLocation } from '../utils/fuzzyLocation';
 import { getDistanceKm, fuzzyDistance } from '../utils/distance';
 import { sendSignal } from '../utils/signalLimit';
@@ -215,8 +219,14 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
   const [anonymous, setAnonymous] = useState(false);
   const [genderFilter, setGenderFilter] = useState('all');
   const [senderQuote, setSenderQuote] = useState('');
+  const [showPostNote, setShowPostNote] = useState(false);
+  const [showNotesList, setShowNotesList] = useState(false);
+  const [selectedNote, setSelectedNote] = useState(null);
+  const [noteAnonymous, setNoteAnonymous] = useState(false);
+  const [sendingNoteSignal, setSendingNoteSignal] = useState(false);
 
   const allNearbyUsers = useNearbyUsers(user?.uid);
+  const allNotes = useNotes(user?.uid);
 
   // Filter by radius and gender, then spread any markers that share the same fuzzy coordinate
   const nearbyUsers = offsetDuplicates(
@@ -228,6 +238,13 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
       })
       .filter((u) => genderFilter === 'all' || u.gender === genderFilter)
   );
+
+  // Notes visible to everyone within the same radius used for person markers
+  const nearbyNotes = allNotes.filter((n) => {
+    if (n.uid === user?.uid) return true;
+    if (!userCoordsRef.current) return true;
+    return getDistanceKm(userCoordsRef.current.lat, userCoordsRef.current.lng, n.lat, n.lng) <= NEARBY_RADIUS_KM;
+  });
 
   // First-time visibility prompt (shown once after onboarding)
   useEffect(() => {
@@ -346,6 +363,54 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
     ? getDistanceKm(userCoordsRef.current.lat, userCoordsRef.current.lng, selectedUser.lat, selectedUser.lng)
     : null;
 
+  const handleOpenPostNote = () => {
+    if (!visible) { showToast('Go visible to post a Note', 'error'); return; }
+    setShowPostNote(true);
+  };
+
+  const handlePostNote = async (text) => {
+    if (!userCoords || !user) return;
+    try {
+      const fuzzy = fuzzyLocation(userCoords.lat, userCoords.lng);
+      await postNote(user.uid, { text, lat: fuzzy.lat, lng: fuzzy.lng });
+      showToast('Note posted — visible for 6 hours');
+    } catch {
+      showToast('Failed to post Note', 'error');
+    }
+  };
+
+  const handleDeleteNote = async (noteId) => {
+    try {
+      await deleteNote(noteId);
+      showToast('Note deleted');
+    } catch { showToast('Failed to delete Note', 'error'); }
+  };
+
+  const handleReportNote = async (noteId) => {
+    try {
+      await reportNote(noteId);
+      showToast('Note reported. Thank you.');
+    } catch { showToast('Failed to report Note', 'error'); }
+  };
+
+  const handleReplyToNote = (note) => {
+    setShowNotesList(false);
+    setSelectedNote(note);
+    setNoteAnonymous(false);
+  };
+
+  const handleSendNoteSignal = useCallback(async () => {
+    if (!selectedNote || !user || !profile) return;
+    setSendingNoteSignal(true);
+    const enrichedProfile = { ...profile, senderQuote: null, toDisplayName: null };
+    const signalId = await sendSignal(user.uid, selectedNote.uid, noteAnonymous, enrichedProfile, showToast);
+    setSendingNoteSignal(false);
+    if (signalId) {
+      setSelectedNote(null);
+      showToast('Signal sent!', 'success');
+    }
+  }, [selectedNote, user, profile, noteAnonymous, showToast]);
+
   const defaultCenter = userCoords || { lat: 12.9716, lng: 77.5946 };
 
   return (
@@ -381,6 +446,14 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
                 ? getDistanceKm(userCoordsRef.current.lat, userCoordsRef.current.lng, u.lat, u.lng)
                 : null)}
               eventHandlers={{ click: () => { setSelectedUser(u); setAnonymous(false); } }}
+            />
+          ))}
+          {nearbyNotes.map((n) => (
+            <Marker
+              key={n.id}
+              position={[n.lat, n.lng]}
+              icon={makeNoteMarkerIcon(n)}
+              eventHandlers={{ click: () => { if (n.uid !== user?.uid) { setSelectedNote(n); setNoteAnonymous(false); } } }}
             />
           ))}
         </MapContainer>
@@ -428,6 +501,21 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
           <button className={`visibility-pill${visible ? ' visible' : ''}`} onClick={toggleVisibility}>
             <i className={`ti ${visible ? 'ti-radio' : 'ti-ghost'}`} />
             {visible ? `Visible · ${timeLeft}` : 'Ghost Mode'}
+          </button>
+        </div>
+
+        {/* Notes FAB cluster */}
+        <div className="notes-fab-wrap">
+          <button className="notes-list-btn" onClick={() => setShowNotesList(true)} title="Notes nearby">
+            <i className="ti ti-note" />
+            {nearbyNotes.length > 0 && (
+              <span style={{ position: 'absolute', transform: 'translate(14px, -14px)', minWidth: 16, height: 16, borderRadius: 8, background: '#F59E0B', color: '#1A1200', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
+                {nearbyNotes.length}
+              </span>
+            )}
+          </button>
+          <button className="notes-post-fab" onClick={handleOpenPostNote} title="Post a Note">
+            <i className="ti ti-plus" />
           </button>
         </div>
       </div>
@@ -546,6 +634,69 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
 
             <button className="btn btn-primary btn-full" onClick={handleSignal} disabled={sendingSignal}>
               {sendingSignal ? <span className="spinner" style={{ width: 18, height: 18 }} /> : <><i className="ti ti-send" /> Send Signal</>}
+            </button>
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Post a Note */}
+      {showPostNote && (
+        <NotePostSheet onClose={() => setShowPostNote(false)} onPost={handlePostNote} />
+      )}
+
+      {/* Notes list */}
+      {showNotesList && (
+        <NotesListSheet
+          notes={nearbyNotes}
+          myUid={user?.uid}
+          userCoords={userCoordsRef.current}
+          onClose={() => setShowNotesList(false)}
+          onReply={handleReplyToNote}
+          onDelete={handleDeleteNote}
+          onReport={handleReportNote}
+        />
+      )}
+
+      {/* Reply to a Note — same anonymous-or-not signal flow as messaging a person marker */}
+      {selectedNote && (
+        <BottomSheet onClose={() => setSelectedNote(null)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Reply to this Note</div>
+              <div style={{
+                padding: '12px 14px', borderRadius: 14,
+                background: 'rgba(245,158,11,0.08)', border: '1.5px solid rgba(245,158,11,0.35)',
+                fontSize: 15, color: 'var(--color-text-primary)', lineHeight: 1.5,
+              }}>
+                {selectedNote.text}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <SignalModeCard
+                title="As Yourself"
+                icon={
+                  profile?.photoURL
+                    ? <img src={profile.photoURL} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} alt="" />
+                    : <i className="ti ti-user" style={{ fontSize: 28, color: 'var(--color-primary)' }} />
+                }
+                subtitle={profile?.displayName}
+                description="They'll see who you are"
+                selected={!noteAnonymous}
+                onClick={() => setNoteAnonymous(false)}
+              />
+              <SignalModeCard
+                title="As Ghost"
+                icon={<i className="ti ti-ghost" style={{ fontSize: 28, color: 'var(--color-text-secondary)' }} />}
+                subtitle="Anonymous"
+                description="They won't know it's you"
+                selected={noteAnonymous}
+                onClick={() => setNoteAnonymous(true)}
+              />
+            </div>
+
+            <button className="btn btn-primary btn-full" onClick={handleSendNoteSignal} disabled={sendingNoteSignal}>
+              {sendingNoteSignal ? <span className="spinner" style={{ width: 18, height: 18 }} /> : <><i className="ti ti-send" /> Send Signal</>}
             </button>
           </div>
         </BottomSheet>

@@ -97,6 +97,16 @@ const locationFromDb = (r) => !r ? null : ({
   expiresAt: r.expires_at,
 });
 
+const noteFromDb = (r) => !r ? null : ({
+  id: r.id,
+  uid: r.user_id,
+  text: r.text,
+  lat: r.lat, lng: r.lng,
+  createdAt: r.created_at,
+  expiresAt: r.expires_at,
+  reportCount: r.report_count || 0,
+});
+
 // ── Realtime helper ────────────────────────────────────────────
 // Each call gets a unique channel name — Supabase returns the existing channel
 // if the name is reused, and calling .on() on an already-subscribed channel throws.
@@ -228,6 +238,44 @@ export function subscribeLocation(uid, callback) {
     },
     callback
   );
+}
+
+// ── Notes ─────────────────────────────────────────────────────
+const NOTE_DURATION_MS = 6 * 60 * 60 * 1000;
+
+export async function postNote(uid, { text, lat, lng }) {
+  await supabase.from('notes').delete().eq('user_id', uid);
+  const createdAt = new Date();
+  const expiresAt = new Date(createdAt.getTime() + NOTE_DURATION_MS);
+  const { data, error } = await supabase.from('notes').insert({
+    user_id: uid,
+    text,
+    lat, lng,
+    created_at: createdAt.toISOString(),
+    expires_at: expiresAt.toISOString(),
+  }).select('*').single();
+  if (error) throw error;
+  return noteFromDb(data);
+}
+
+export async function deleteNote(noteId) {
+  await supabase.from('notes').delete().eq('id', noteId);
+}
+
+export async function reportNote(noteId) {
+  const { error } = await supabase.rpc('report_note', { p_note_id: noteId });
+  if (error) throw error;
+}
+
+export function subscribeNearbyNotes(callback) {
+  const fetch = async () => {
+    const { data } = await supabase
+      .from('notes').select('*')
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+    return (data || []).map(noteFromDb);
+  };
+  return makeSub('nearby-notes', 'notes', null, fetch, callback);
 }
 
 // ── Signal cooldowns ───────────────────────────────────────────

@@ -72,6 +72,30 @@ ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "locations_select" ON locations FOR SELECT USING (auth.uid() IS NOT NULL);
 CREATE POLICY "locations_all"    ON locations FOR ALL    USING (auth.uid() = user_id);
 
+-- ── Notes ─────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS notes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  text TEXT NOT NULL CHECK (char_length(text) BETWEEN 1 AND 120),
+  lat DOUBLE PRECISION NOT NULL,
+  lng DOUBLE PRECISION NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  report_count INT NOT NULL DEFAULT 0,
+  CHECK (expires_at = created_at + INTERVAL '6 hours')
+);
+CREATE INDEX IF NOT EXISTS notes_user_id_idx ON notes(user_id);
+CREATE INDEX IF NOT EXISTS notes_expires_at_idx ON notes(expires_at);
+ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "notes_select" ON notes FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "notes_insert" ON notes FOR INSERT WITH CHECK (
+  auth.uid() = user_id
+  AND EXISTS (SELECT 1 FROM locations WHERE user_id = auth.uid() AND expires_at > NOW())
+  AND NOT EXISTS (SELECT 1 FROM notes existing WHERE existing.user_id = auth.uid() AND existing.expires_at > NOW())
+);
+CREATE POLICY "notes_delete" ON notes FOR DELETE USING (auth.uid() = user_id);
+-- No UPDATE policy — report_count only changes via report_note() below.
+
 -- ── Signals ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS signals (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -341,6 +365,16 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ============================================================
+-- RPC: report_note
+-- ============================================================
+CREATE OR REPLACE FUNCTION report_note(p_note_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE notes SET report_count = report_count + 1 WHERE id = p_note_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
 -- RPC: accept_friend_request
 -- ============================================================
 CREATE OR REPLACE FUNCTION accept_friend_request(
@@ -450,3 +484,4 @@ DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE vibe_requests;  EXCEPT
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE follows;        EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE profiles;       EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE posts;          EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE notes;          EXCEPTION WHEN duplicate_object THEN NULL; END $$;
