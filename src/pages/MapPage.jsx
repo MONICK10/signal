@@ -238,12 +238,12 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
     }
   }, []);
 
-  // Restore visibility state after reload: check if active location doc exists in Firestore
+  // Restore visibility state after reload: check if active location row exists in Supabase
   useEffect(() => {
     if (!user?.uid) return;
     getLocation(user.uid).then((loc) => {
       if (!loc) return;
-      const exp = loc.expiresAt?.toDate?.() ?? (loc.expiresAt instanceof Date ? loc.expiresAt : null);
+      const exp = loc.expiresAt ? new Date(loc.expiresAt) : null;
       if (exp && exp > new Date()) {
         setVisible(true);
         setExpiresAt(exp.getTime());
