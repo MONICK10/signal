@@ -485,6 +485,12 @@ export default function MapPage({ user, profile, unreadNotifCount = 0 }) {
                   </div>
                 )}
               </div>
+              <button
+                onClick={() => { setSelectedUser(null); navigate(`/profile/${selectedUser.id}`); }}
+                style={{ background: 'none', border: '1.5px solid var(--color-border)', borderRadius: 10, cursor: 'pointer', color: 'var(--color-text-primary)', padding: '6px 12px', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}
+              >
+                View Profile
+              </button>
               <UserActionMenu
                 myUid={user?.uid}
                 targetUid={selectedUser.id}
