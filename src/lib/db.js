@@ -249,16 +249,36 @@ export async function setSignalCooldown(senderUid, targetUid) {
   });
 }
 
+const SIGNALS_PER_HOUR = 6;
+
 export async function checkGlobalSignalCooldown(uid) {
-  const { data } = await supabase.from('profiles').select('last_signal_sent_at').eq('id', uid).maybeSingle();
-  if (!data?.last_signal_sent_at) return { canSend: true };
-  const diff = (Date.now() - new Date(data.last_signal_sent_at).getTime()) / 1000 / 60;
-  if (diff < 60) return { canSend: false, remaining: Math.ceil(60 - diff) };
-  return { canSend: true };
+  const { data } = await supabase
+    .from('profiles').select('signal_window_started_at, signal_window_count')
+    .eq('id', uid).maybeSingle();
+  const started = data?.signal_window_started_at;
+  if (!started) return { canSend: true };
+  const diff = (Date.now() - new Date(started).getTime()) / 1000 / 60;
+  if (diff >= 60) return { canSend: true };
+  if ((data.signal_window_count || 0) < SIGNALS_PER_HOUR) return { canSend: true };
+  return { canSend: false, remaining: Math.ceil(60 - diff) };
 }
 
 export async function setGlobalSignalCooldown(uid) {
-  await supabase.from('profiles').update({ last_signal_sent_at: new Date().toISOString() }).eq('id', uid);
+  const { data } = await supabase
+    .from('profiles').select('signal_window_started_at, signal_window_count')
+    .eq('id', uid).maybeSingle();
+  const started = data?.signal_window_started_at;
+  const diff = started ? (Date.now() - new Date(started).getTime()) / 1000 / 60 : Infinity;
+  if (diff >= 60) {
+    await supabase.from('profiles').update({
+      signal_window_started_at: new Date().toISOString(),
+      signal_window_count: 1,
+    }).eq('id', uid);
+  } else {
+    await supabase.from('profiles').update({
+      signal_window_count: (data.signal_window_count || 0) + 1,
+    }).eq('id', uid);
+  }
 }
 
 // ── Signals ────────────────────────────────────────────────────

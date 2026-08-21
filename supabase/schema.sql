@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   notification_prefs JSONB DEFAULT '{}',
   fcm_tokens TEXT[] DEFAULT '{}',
   last_signal_sent_at TIMESTAMPTZ,
+  signal_window_started_at TIMESTAMPTZ,
+  signal_window_count INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
